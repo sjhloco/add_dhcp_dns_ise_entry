@@ -28,6 +28,10 @@ NEED TO decide!!! This plays into how to get info between scripts, is only optio
 **NOT STARTED**
 
 ### 4. pre_post_checks.py
+<<<<<<< HEAD
 -Check entires added and the total reservations using existing pre_post_checks.py but with pre-check flag = Flase
+=======
+-Check entires added and the total reservations using existing pre_post_checks.py but with pre-check flag = False
+>>>>>>> 7380091533d4b943cb7b9fc7626269592efac2c9
 
 **NOTSTARTED**
