@@ -2,7 +2,7 @@
 
 ### 1. main.py: Take the CSV file and validate:
 -all the IPs are valid IP address\
--all the domain names end in .fos.org.uk\
+-all the domain names end in .stesworld.com\
 -The scopes are a legitamate range\
 -The addresses are legit IPs within that range\
 -Test username and password\
