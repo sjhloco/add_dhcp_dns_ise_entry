@@ -7,7 +7,6 @@ class validate():
     def read_csv(self):
         return(self.csv_file)
 
-
 def main():
     csv_file = argv[1]
     validation = validate(csv_file)

@@ -1,26 +1,42 @@
 from pypsrp.powershell import PowerShell, RunspacePool
 from pypsrp.wsman import WSMan
 from pprint import pprint
+import os
 
 class checks():
-    def __init__(self, user, password, csv_dm, pre_check, servers):
+    def __init__(self, user, password, csv_dm, dhcp_dm, pre_check, servers):
         self.user = user
         self.password = password
         self.csv_dm = csv_dm
+        self.dhcp_dm = dhcp_dm
         self.pre_check = pre_check
         self.servers = servers
-        # Lists used in verify functions
-        self.dhcp_dm = []
 
         # WSman connection used to run powershell cmds on windows servers
-        self.wsman_conn = WSMan(self.servers['dhcp'], username=self.user, password=self.password,ssl=False)
+        self.wsman_conn = WSMan(self.servers['dhcp'], username=self.user, password=self.password, ssl=False)
 
     # Check if scopes exist on DHCP server, if DNS zone exists, if ISE group exists if not failfast
     def failfast(self):
-        pass
+        bad_scopes = []
+        # Fails if any of the scopes does not exisit on the DHCP server
+        for csv_dict in self.csv_dm:
+            for scope in csv_dict.keys():
+                # Get list of all reservations in the scope
+                with RunspacePool(self.wsman_conn) as pool:
+                    ps = PowerShell(pool)
+                    # The powershell cmd is "Get-DhcpServerv4Reservation -scopeid 192.168.200.0"
+                    ps.add_cmdlet("Invoke-Expression").add_parameter("Command", "Get-DhcpServerv4Reservation -scopeid {}".format(scope))
+                    ps.add_cmdlet("Out-String").add_parameter("Stream")
+                    ps.invoke()
+                    dhcp_reserv = ps.output
+                if len(dhcp_reserv) == 0:
+                    bad_scopes.append(scope)
+
+        if bad_scopes != 0:
+            print('!!! Error - These scopes dont exist on the DHCP server: {}'.format(bad_scopes))
+            exit()
 
     def dhcp(self):
-
         # On a per-scope gets all the current DHCP addresses that will then be compared to those in the CSV
         for csv_dict in self.csv_dm:
             for scope in csv_dict.keys():
@@ -90,6 +106,7 @@ class checks():
         elif self.pre_check is False:
             print("No conflicts")
 
+        return(used_reserv)
 
 
 # dhcp_server = "10.30.10.81"
