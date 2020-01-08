@@ -143,6 +143,7 @@ class validate():
 class main_menu():
     def __init__(self, csv_dm):
         self.csv_dm = csv_dm
+        self.dhcp_dm = []               # Even though not used till pre_post_checks.py add here for pytest
 
     # 5. Collects login detais and tests that they are correct Assumed if works on one device will work on all
     def login(self):
@@ -168,11 +169,11 @@ What type of task is being performed?'
 3. Add DHCP, DNS and ISE entries
 4. Delete DHCP, DNS and ISE entries''')
         task = input("Enter a number: ")
-
         while True:
             if task == '1':
                 pre_check = True
-                test = checks(user, password, self.csv_dm, pre_check, servers)
+                test = checks(user, password, self.csv_dm, self.dhcp_dm, pre_check, servers)
+                test.failfast()
                 test.dhcp()
                 test.dhcp_verify()
                 # create = True
