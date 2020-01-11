@@ -8,40 +8,50 @@
 -Test username and password\
 -Create new data model to be used by pre and post-checks\
 -Present the user with a main menu\
--Reformat CSV to remove /prefix from the scope               >>>> Do when do create_entries.py script
-
+-Reformat CSV to remove /prefix from the scope
 **COMPLETED**
 
-### 2a. pre_post_checks.py: Using DM from main.py to check against DHCP server
+### 2a. win_dhcp.py: Using DM from main.py to check against DHCP server
 -Add failfast function if the DHCP scope does not exist
--Create pytests for pre_post_checks
+-Add pre-checks/ post-checks to verify if entries shouldnt exist (add DHCP) or should exist (remove DHCP)
 **COMPLETED**
 
--Either return info to main.py or run next script from pre_post_checks.py.\
-NEED TO decide!!! This plays into how to get info between scripts, is only option JSON?\
+-Redo pytests, need to soemhow mock connecting to DHCP server?
 -Write up notes doc on how can use the tools to get info with powershell\
 **INPROGRESS**
 
-### 2b. pre_post_checks.py: check against DNS server
--Add failfast function if the DNS PTR zone do not exist
--Check that PTR or A record dont exist
--Create pytests for pre_post_checks
+### 2b. win_dhcp.py: Add or remove entries to DHCP
+-Reformat CSV to remove /prefix from the scope
+-Add/remove entries DHCP from DHCP server
+!!! If the name, IP or mac already exists in DHCP it wont let you add the entry !!!!
+**COMPLETED**
 
 **NOT STARTED**
+--Do pytests, need to soemhow mock connecting to DHCP server?
 
-### 3a. create_entries.py: Add the new entries to DHCP
--Reformat CSV to remove /prefix from the scope\
--Add the entries to DHCP
-
+### 3a. win_dns.py: check against DNS server
+-Add failfast function if the DNS or PTR zone do not exist
+-Add pre-checks/ post-checks to verify if A Record PTR entries shouldnt exist (add DNS) or should exist (remove DNS)
+-Create pytests
 **NOT STARTED**
 
-### 3b. create_entries.py: Add the new entries to DNS
--Add the entries to DNS
-
+### 3b. win_dns.py: Add or remove the new entries to DNS
+-Add/remove entries DHCP from DHCP server
+-Create pytests
 **NOT STARTED**
 
-### 4. pre_post_checks.py
--Check DHCP entires added and the total reservations using existing pre_post_checks.py but with pre-check flag = Flase
--Check DNS entires added and the total records using existing pre_post_checks.py but with pre-check flag = Flase
+### 4. main.py: Main menu
+-Need to refactor it so have all the different options but not too complicated and DRY!!!!!
+**NOT STARTED**
 
-**NOTSTARTED**
+### 3a. cisco_ise.py: check against ISE
+-Build test ISE lab
+-Add failfast function, need ot decide what???
+-Add pre-checks/ post-checks to verify if what???
+-Create pytests
+**NOT STARTED**
+
+### 3b. win_dns.py: Add or remove the new entries to ISE
+-Add/remove endhost entries in ISE
+-Create pytests
+**NOT STARTED**

@@ -14,30 +14,34 @@ from pprint import pprint
 from getpass import getpass
 from pypsrp.client import Client
 from collections import defaultdict
+from pre_post_checks import Dhcp
 
-################# CSV format #################
+##################################  CSV format ##################################
 # ScopeId,IPAddress,Name,ClientId,Description
 # 10.10.10.0,10.10.10.10,Computer1.stesworld.com,1a-1b-1c-1d-1e-1f,Reserved for Computer1
 # 20.20.20.0,20.20.20.11,Computer2.stesworld.com,2a-2b-2c-2d-2e-2f,Reserved for Computer2
 
-################# Variables to change dependant on environment #################
+######################## Variables to change dependant on environment ########################
 # Where script will look for the csv, by default is the users home directory
 directory = expanduser("~")
 # domain_name expected for DHCP and DNS entries (must be upto last.)
 domain_name = "stesworld.com"
 
 # Servers that the script will run against
-dhcp_server = "10.30.10.81"
-dns_server = "10.30.10.81"
-ise_admin = "10.30.10.81"
-servers = {'dhcp': dhcp_server, 'dns': dns_server, 'ise': ise_admin }
+dhcp_svr = "10.30.10.81"
+dns_svr = "10.30.10.81"
+ise_adm = "10.30.10.81"
 
-################# Santiy check CSV #################
-class validate():
+# Temp files used by DHCP
+temp_csv = os.path.join(directory, 'temp_csv.csv')                  # CSV with DHCP scope with prefixes removed
+win_dir = os.path.join('C:\\temp', os.path.split(temp_csv)[1])      # Location on DHCP server csv run from
+
+##################################  Santiy check CSV and its contents ##################################
+class Validate():
     def __init__(self, csv_file):
         self.csv_file = csv_file
         self.csv_output = []                            # Create a new list
-        self.csv_output1 = []                            # TEMP
+
 # 2. Open CSV file and create a list of scopes and a list of tuples (ip_add, domain_name)
     def read_csv(self):
         with open(self.csv_file, 'r') as x:
@@ -55,15 +59,12 @@ class validate():
                 # As long as all columns have values creates a list of dicts (scope) with value being a tuple (ip, name, mac, description)
                 elif all(0 != len(s) for s in row):
                     self.csv_output.append({row[0]: (row[1], row[2].lower(), row[3].lower())})      # makes sure mac and domain are lowercase
-                    self.csv_output1.append({row[0]: [[row[1]], [row[2].lower()], [row[3].lower()]]})      # TEMP
                 else:                                   # If any column is empty script fails
                     print("!!!ERROR - The CSV is in invalid, check for empty columns and rerun")
                     exit()
         self.csv_output = self.csv_output[1:]           # Removes the header column
-        self.csv_output1 = self.csv_output1[1:]           # TEMP
         return self.csv_output                          # Used for pytest
 
-################# Santiy check contents of data model #################
 # 3. Make sure that the details in the CSV are in a valid correct format, if not ends the script fails
     def verify(self):
         scope_error, ip_error, dom_error, mac_error, ip_in_net_error = ([] for i in range(5))    # Lists to store invalid elements
@@ -119,210 +120,168 @@ class validate():
         if len(scope_error) != 0 or len(ip_error) != 0 or len(dom_error) != 0 or len(mac_error) != 0 or len(ip_in_net_error) !=0:
             exit()
 
-################# Creates data model used in pre_post_checks script used to check if entry already exists #################
+################# Creates new data model used in pre_post_checks script used to check if entry already exists #################
+
 # 4. Combines all addresses with the same scope as values (ip, name, mac) under that Key (scope)
     def data_model(self):
         global csv_dm                   # New DM that wll be used in pre_post_checks
-        csv_dm, csv_dm1, csv_ip, csv_mac, csv_name, csv_ip_name_mac = ([] for i in range(6))
-        csv_dm2 = defaultdict(list)      # Temp defaultdict list. Has to be defaultdict or will fail if key is not found in the dictionary
+        csv_dm = []
+        csv_dm1 = defaultdict(list)      # Temp defaultdict list. Has to be defaultdict or will fail if key is not found in the dictionary
 
         # Creates 1 big dictionary of the new data model (rather than being list of dicts per scope)
-        scopes = []
         for x in self.csv_output:
             for key, value in x.items():
-                # key = key.split('/')[0]             # strips prefix from the scope
-                csv_dm2[key].append(value)          # Removes duplicate keys, although dont know how?
-                # scopes.append(key)
-        # scopes = set(scopes)                # makes set to remove duplicates
-        # print(self.csv_output1)
-
-
-        # print(csv_dm2)
-        # for x, y in zip(scopes, csv_dm2.items()):
-        #     if x == y[0]:
-        #         for z in y[1]:
-        #            pprint(z[0])
-            # print(k)
-            # print(y)
-        # for y in csv_dm2.items():
-        #     print(type(y))
-        # pprint(csv_dm2)
-
-        #         print(y)
-        # for x, y in zip(scopes, csv_dm2.items()):
-        #     # if x == y.keys():
-        #     #     print('YESY')
-        #
+                csv_dm1[key].append(value)          # Removes duplicate keys, although dont know how?
 
         # # Splits the 1 big dictionary into a list different dictionaries (per-scope), removes the prefix and creates list of scopes
-        for (k,v) in csv_dm2.items():
+        for (k,v) in csv_dm1.items():
             k = k.split('/')[0]
-            csv_dm1.append({k:v})
-            scopes.append(k)
+            csv_dm.append({k:v})
 
-        csv_ip2, csv_name2, csv_mac2 = ([] for i in range(3))
-        csv_ip3, csv_name3, csv_mac3 = ([] for i in range(3))
+        return csv_dm                       # Used for pytest
 
-        for x in enumerate(csv_dm1, start=1):
-            for k, v in x[1].items():
-                for vv in v:
-                    if x[0] == 1:
-                        csv_ip.append(vv[0])
-                        csv_name.append(vv[1])
-                        csv_mac.append(vv[2])
-                        x[1][k] = [csv_ip, csv_name, csv_mac]
-                        # csv_ip, csv_name, csv_mac = ([] for i in range(3))
-                    elif x[0] == 2:
-                        csv_ip2.append(vv[0])
-                        csv_name2.append(vv[1])
-                        csv_mac2.append(vv[2])
-                        x[1][k] = [csv_ip, csv_name, csv_mac]
-                    elif x[0] == 3:
-                        csv_ip3.append(vv[0])
-                        csv_name3.append(vv[1])
-                        csv_mac3.append(vv[2])
-                        x[1][k] = [csv_ip, csv_name, csv_mac]
-        pprint(self.csv_output1)
-        # print(scopes)
-        # for x, y in zip(scopes, csv_dm1):
-        # # pprint(csv_dm1)
-        #     print(y.keys())
-        #         # print(y.values())
-
-        # for x in scopes:
-        #     for y in csv_dm1.keys():
-        #         if x == y:
-        #             pprint(csv_dm2.values())
-        #         # print(y)
-
-        # # On a per-scope basis creates CSV DM of scope: [[IP], [mac], [name], [(IP, MAC, name)]]
-        # for scope in scopes:
-        #     a = csv_dm2[scope]
-        #         # for vv in v:
-        #         #     if scope == k:
-        #         #         csv_ip.append(vv[0])
-        #         # if scope == k:
-
-        # print(csv_ip)
-        # print(a)
-            # scope_dict['yest']: 'yes'
-            # print(scope_dict)
-        # pprint(csv_dm1)
-        # for (k,v) in csv_dm2.items():
-        #     k = k.split('/')[0]
-        #     csv_dm1.append({k:v})
-
-
-        # # pprint(self.csv_output)
-        # # pprint(csv_dm2)
-        # csv_dm3 = {}
-        # for scope_dict, v in csv_dm2.items():
-        #     for vv in v:
-        #         if scope_dict == scope_dict:
-        #             # csv_dm3[scope_dict] = vv[0]
-        #             csv_ip.append(vv[0])
-        #     # pprint(scope_dict)
-        #     # pprint(v)
-        # # pprint(csv_ip)
-
-        # pprint(csv_ip)
-        # pprint(csv_dm1)
-
-
-            # for k, v in scope_dict.items():
-            #     for vv in v:
-            #         b = {k:csv_ip.append(vv[0])}
-            #         a = {k: csv_ip}
-            # for k, v in scope_dict.items():
-            #     for vv in v:
-            #         a = {k:csv_ip.append(vv[0])}
-                # a = {k:csv_ip}
-                    # print(k, vv[0])
-            # print(scope_dict.values()[0])
-            #
-                # print(k)
-        #         for vv in v:
-        #             csv_ip.append(vv[0])
-        #         csv_dm.append({k:csv_ip})
-        # pprint(csv_dm1)
-
-
-        #     dhcp_ip.append((r.split()[0]))
-        #     dhcp_name.append((r.split()[3].lower()))
-        #     dhcp_mac.append((r.split()[2].lower()))
-        #     dhcp_ip_name_mac.append((r.split()[0], r.split()[3].lower(), r.split()[2].lower()))
-
-        # self.dhcp_dm.append({scope:[dhcp_ip, dhcp_name, dhcp_mac, dhcp_ip_name_mac]})
-
-        #     for vv in v:
-        #         csv_ip.append(vv[0])
-        #         csv_name.append(vv[1])
-        #         csv_mac.append(vv[2])
-        #         csv_ip_name_mac = [vv[0], vv[1], vv[2]]
-        #         csv_dm.append({k:[csv_ip, csv_name, csv_mac, csv_ip_name_mac]})
-
-            #
-        # return csv_dm                       # Used for pytest
-        # pprint(csv_ip)
 ################# Get login details and main menu from which tasks are run #################
 
-class main_menu():
+class Main_menu():
     def __init__(self, csv_dm):
         self.csv_dm = csv_dm
 
     # 5. Collects login detais and tests that they are correct Assumed if works on one device will work on all
     def login(self):
-        complete = False                        # Used to keep loop going if entered credentials are wrong
-        while not complete:
+        self.complete = False                        # Used to keep loop going if entered credentials are wrong
+        while not self.complete:
             try:
-                user = input("Enter your username: ")
-                password = getpass()
+                self.user = input("Enter your username: ")
+                self.password = getpass()
                 # Test credentials by running simple cmd on the DHCP serber
-                conn = Client(dhcp_server, username=user, password=password,ssl=False)
+                conn = Client(dhcp_svr, username=self.user, password=self.password,ssl=False)
                 conn.execute_cmd('ipconfig')
-                self.task(user, password)       # Runs next function (6)
-                complete = True                 # Kills the loop
+                self.task()       # Runs next function (6)
+
             except Exception as e:              # If login fails loops to begining displaying this error message
                 print(e)
 
     # 6. Main menu. The options user can select which will run the required tasks in other (imported) scripts
-    def task(self, user, password):
+    def task(self):
+        self.complete = True                 # Kills the loop for login
         print('''
-What type of task is being performed?'
-1. Add DHCP and DNS entries
-2. Delete DHCP and DNS entries
-3. Add DHCP, DNS and ISE entries
-4. Delete DHCP, DNS and ISE entries''')
+What type of task is being performed?
+1. Add DHCP Entry
+2. Delete DHCP entry
+''')
+# 1. Add DHCP and DNS entries
+# 2. Delete DHCP and DNS entries
+# 3. Add DHCP, DNS and ISE entries
+# 4. Delete DHCP, DNS and ISE entries
         task = input("Enter a number: ")
-
+        print()
         while True:
             if task == '1':
-                print(1)
-                create = True
-                break
-            elif task == '2':
-                print(2)
-                create = False
-                break
-            elif task == '3':
-                print(3)
-                create = True
-                break
-            elif task == '4':
-                print(4)
-                create = False
-                break
+                type = 'add'
+                self.task_dhcp_add(type)
+            if task == '2':
+                type = 'remove'
+                self.task_dhcp(type)
+            # elif task == '2':
+            #     print(2)
+            #     create = False
+            #     break
+            # elif task == '3':
+            #     print(3)
+            #     create = True
+            #     break
+            # elif task == '4':
+            #     print(4)
+            #     create = False
+            #     break
             else:
                 task = input("Not recognised, enter a valid number: ")
+
+    def task_dhcp_add(self, type):
+        dhcp = Dhcp(dhcp_svr, self.user, self.password, self.csv_dm)
+        # dns = Dns(dns_svr, user, password, self.csv_dm)
+        # Fails if Scopes or Domains do not exist
+        dhcp_failfast = dhcp.failfast()
+        dns_failfast = None     # change to when DNS is done dns.failfast()
+        if dhcp_failfast != None or dns_failfast != None:
+            print(dhcp_failfast, '\n', dns_failfast)
+            exit()
+        # Fails if any of the new reservations or DNS entries already exist
+        dhcp_verify_pre = dhcp.verify()
+        dns_verify_pre = {'DNS': []}     # change to when DNS is done dns.verify()
+        if len(dhcp_verify_pre[1]['DHCP']) != 0 or len(dns_verify_pre['DNS']) != 0:
+            print("!!! Error - These entries already exist, you must delete the duplicates before can run the script.")
+            pprint(dhcp_verify_pre[1])
+            pprint(dns_verify_pre)
+            exit()
+        # Create DHCP entries and verify
+        dhcp_create = dhcp.create(csv_file, type, temp_csv, win_dir)
+        # Error handling based on the DHCP cmds run
+        if dhcp_create[1] is True:
+            "!!! Warning - Was maybe an issue with the config commands sent to the DHCP server."
+        if dhcp_create[2] != 0:
+            "!!! Error - Was maybe an issue with the reservations/ CSV file sent to the DHCP server."
+        # Verification and error handling based current entries on DHCP server
+        dhcp_verify_post = dhcp.verify()
+        print("Check and confirm the numbers below add up.")
+        print("Num Entries in CSV: {}, Num Reservations Before: {}, Num Reservations After: {}".format(dhcp_create[0], dhcp_verify_pre[0], dhcp_verify_post[0]))
+        if len(dhcp_verify_post[2]) != 0:
+            print("!!! Error - the following new DHCP reservations are missing on the DHCP server")
+            pprint(dhcp_verify_post[2])
+        else:
+            print("The script has verified all IP addresses in the CSV are now DHCP reservations.")
+        exit()
+
+    def task_dhcp_remove(self, type):
+        dhcp = Dhcp(dhcp_svr, self.user, self.password, self.csv_dm)
+        # Fails if Scopes or Domains do not exist
+        dhcp_failfast = dhcp.failfast()
+        if dhcp_failfast != None:
+            print(dhcp_failfast)
+            exit()
+        # Fails if any of the reservations or DNS entries dont exist
+        dhcp_verify_pre = dhcp.verify()
+        if len(dhcp_verify_pre[2]) != 0:
+            print("!!! Error - These entries do not exist, you must remove from CSV before you can run the script.")
+            pprint(dhcp_verify_pre[2])
+            # pprint(dns_verify_pre)
+            exit()
+
+        # Delete DHCP entries and verify
+        dhcp_create = dhcp.create(csv_file, type, temp_csv, win_dir)
+        # Error handling based on the DHCP cmds run
+        if dhcp_create[1] is True:
+            "!!! Warning - Was maybe an issue with the config commands sent to the DHCP server."
+        if dhcp_create[2] != 0:
+            "!!! Error - Was maybe an issue with the reservations/ CSV file sent to the DHCP server."
+        # Verification and error handling based current entries on DHCP server
+        dhcp_verify_post = dhcp.verify()
+        print("Check and confirm the numbers below add up.")
+        print("Num Entries in CSV: {}, Num Reservations Before: {}, Num Reservations After: {}".format(dhcp_create[0], dhcp_verify_pre[0], dhcp_verify_post[0]))
+        if len(dhcp_verify_post[2]) != dhcp_create[0]:      # number of missign entires should equal CSV
+            print("!!! Error - the following DHCP reservations are still used on the DHCP server")
+            pprint(dhcp_verify_post[2])
+        else:
+            print("The script has verified all IP addresses in the CSV are now DHCP reservations.")
+        exit()
+
+
+################# TASKS - runs external modules #################
+# 7. Run the tasks dependant on the user unput.
+
+    # def task_dhcp(self)
+
+
+
 
 ###################################### Run the scripts ######################################
 # 1. Starts the script taking input of CSV file name
 
 def main():
     fname = argv[1]                                 # Creates varaible from the arg passed in when script run (csv file)
+    global csv_file
     csv_file = os.path.join(directory, fname)       # Creates full path to the csv using directory variable
-    validation = validate(csv_file)
-
+    validation = Validate(csv_file)
     # Runs function 2 to validate format of the CSV
     validation.read_csv()
     # Runs function 3 to validate format of the CSV contents
@@ -331,8 +290,8 @@ def main():
     validation.data_model()
 
     # Runs function 5 and 6 to get logon credentails and load main menu
-    # tasks = main_menu(csv_dm)
-    # tasks.login()
+    tasks = Main_menu(csv_dm)
+    tasks.login()
 
 if __name__ == '__main__':
     main()

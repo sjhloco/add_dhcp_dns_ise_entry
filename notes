@@ -1,153 +1,34 @@
-Run the script with the CSV file specified as aprt of script run and either "add" or "remove"
-
-==1. main.py: Take the CSV file and validate:
--all the IPs are valid IP address
--all the domain names end in .fos.org.uk
--The scopes are a legitamate range
--The addresses are legit IPs within that range
--Test username and password
--Create new data model to be used by pre and post checks
--Present user with main menu
--Reformat CSV to remove /prefix from the scope               >>>> Do when do create_entries.py script
-
-COMPLETED
-
-==2. pre_post_checks.py using this new output format to check agianst DHCP serrver
--Add fail fast if DHCP scope does not exist
--Either return info to main.py or run next script from pre_post_checks. NEED TO decide - also how to get ifno between scripts, is it only JSON?
--Write up notes from bottom of these notes on how can use the tools to get info with powershell
--Create pytests for pre_post_chyecks
-
-INPROGRESS
-
-==3. create_entries.py: Add the new entries to DHCP
--Reformat CSV to remove /prefix from the scope
--Add the entries to DHCP
-
-NOT STARTED
-
-==4. pre_post_checks.py
--Check entires added and the totla number is x more than started using post check flag
-
-NOTSTARTED
-
-
-NOTES
-
-==ADD DHCP
--Pre-check: Check whether DHCP name exists
-If yes create a list, return to user and ask to confirm that can be replaced
--Implement: using ZIP of IP/name create all the DHCP entries
--post-check: Show each entry entered, add to a list and compare against CSV
-Not sure how will do this, get full list or one by one, depends how long take to grab each one?
-
-Maybe grab full list at start and finish, then can compare and say howmanyn new lines added
-
-
-== Add reservations
-1. Login and check if any of the reservatiosn are currently used
-Warn if they are, give option whetehr to overwrite or abort
-
-2. If not add reservations from  the CSV
-
-
-==Delete Reservations
-1. Check if any are reservations, if so print message of them and ask for confirmation
-
-
-
-Single Reservation:
-PS C:\> Add-DhcpServerv4Reservation -ScopeId 10.10.10.0 -IPAddress 10.10.10.8 -ClientId "F0-DE-F1-7A-00-5E" -Description "Reservation for Printer"
-
-Add reservation from file:
-PS C:\> Import-Csv -Path "Reservations.csv" | Add-DhcpServerv4Reservation -ComputerName "<servername>"
-
-CSV File structure should be:
-
-ScopeId,IPAddress,Name,ClientId,Description
-10.10.10.0,10.10.10.10,Computer1,1a-1b-1c-1d-1e-1f,Reserved for Computer1
-20.20.20.0,20.20.20.11,Computer2,2a-2b-2c-2d-2e-2f,Reserved for Computer2
-30.30.30.0,30.30.30.12,Computer3,3a-3b-3c-3d-3e-3f,Reserved for Computer3
-
-
--- Get DHCP Scope Reservations
-Get-DhcpServerv4Scope -ScopeId <SubnetIPAddress>
-
--- Get Specific DHCP Scope details
-Get-DhcpServerv4Scope -ComputerName 10.30.10.81 -ScopeId 192.168.200.0
-
--- Import Reservations from CSV
-Import-Csv -Path "C:\tools\ap-reservation.csv" | Add-DhcpServerv4Reservation -ComputerName 10.100.112.10
-
-
-
-cmdswork but couldnt get to work in script as wint return anything more than single value
-
-
-PS C:\Users\Administrator> Get-DhcpServerv4Reservation -IPAddress 192.168.200.45
-
-IPAddress            ScopeId              ClientId             Name                 Type                 Description
----------            -------              --------             ----                 ----                 -----------
-192.168.200.45       192.168.200.0        44-44-55-55-66-66    stetest2             Both
-
-
-PS C:\Users\Administrator> Get-DhcpServerv4Reservation -IPAddress 192.168.200.44
-Get-DhcpServerv4Reservation : Failed to get reservation for IPAddress 192.168.200.44 on DHCP server DC1.
-At line:1 char:1
-+ Get-DhcpServerv4Reservation -IPAddress 192.168.200.44
-+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : InvalidType: (192.168.200.44:root/Microsoft/...erv4Reservation) [Get-DhcpServerv4Reserva
-   tion], CimException
-    + FullyQualifiedErrorId : DHCP 20016,Get-DhcpServerv4Reservation
 
 
 
 
 
-Alternatives:
-
-Want to run:
-get-winevent -logname Microsoft-Windows-TerminalServices-LocalSessionManager/Operational -ComputerName $env:COMPUTERNAME | where {$_.Id -eq "21"}
-
-Solution but not work:
-subprocess.Popen('powershell.exe [get-winevent -logname Microsoft-Windows-TerminalServices-LocalSessionManager/Operational -ComputerName $env:COMPUTERNAME] | where {$_.Id -eq "21"}')
-
-Suggetsed format:
-Using the subprocess library it's possible to run CMD commands within Python. In order to run powershell commands, all you'd need to do is execute C:\Windows\System32\powershell.exe and pass through the arguments. You can replace "Get-Process" with the PowerShell command you need
-
-import subprocess
-subprocess.call('C:\Windows\System32\powershell.exe Get-Process', shell=True)
-
-import subprocess;
-process=subprocess.Popen(["powershell","Get-Childitem C:\\Windows\\*.log"],stdout=subprocess.PIPE);
-result=process.communicate()[0]
-print (result)
 
 
 
-can execute cmds or powershell scripts with pypsrp:
 
-This uses the client to run one cmd, or someones exampel of using for DNS with the cliant and a powershell script
 
-conn = Client(dhcp_server, username=user, password=password,ssl=False)
-conn.execute_cmd('ipconfig')
 
-https://www.linkedin.com/pulse/microsoft-dns-integration-python-nousheef-cholaykkil/
 
-ms_connection = Client(SERVER URL, username=USERNAME, password=PASSWORD,ssl=False)
+# ADD to notes or examples !!!!!!!!!
+Due to issue on pythpn3.7 with dict_keys and dict_values
+either create a list or set of keys or values
+newdict = {1:0, 2:0, 3:0}
+list_keys = [*newdict.keys()]
+list_values = [*newdict.values()]
+set_keys = {*newdict.keys()}
+set_values = {*newdict.values()}
 
-powershell_script_for_getting_zones = """$myarray = @()
-        $Zones = @(Get-DnsServerZone -ComputerName {name})
-        ForEach ($Zone in $Zones) {{
-        $myarray = $myarray +$Zone.ZoneName
-        }}
-        Write-Output $myarray
-        """.format(name=MS_DNS_DEVICE)
+For a list of dicts:
+newdict = [{1:0}, {2:0}, {3:0}]
+key_list = []
+value_list = []
+for x in newdict:
+    key_list.append([*x.keys()][0])
+    value_list.append([*x.values()][0])
+key_list
 
-output, streams, had_errors = connection.execute_ps(powershell_script_for_getting_zones)
+Also add about using *args so can use multiple for inputs when running a script. Add to the inputs document
+https://www.geeksforgeeks.org/args-kwargs-python/
 
-Now need to add my examples that used in script
-https://pypi.org/project/pypsrp/
-https://www.bloggingforlogging.com/2018/08/14/powershell-remoting-on-python/
-this is also used with Ansible so can cross over with scripts if move them to Ansible
-https://docs.ansible.com/ansible/latest/plugins/connection/psrp.html
+# ADD to notes or examples !!!!!!!!!

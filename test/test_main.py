@@ -1,5 +1,5 @@
 # From the named script import the functions to be tested
-from main import validate
+from main import Validate
 import os
 import pytest
 
@@ -12,12 +12,12 @@ test_other_fname = os.path.join(directory, 'test_dom_mac_ipin.csv')
 # from main1 import validate
 # def test_csv_format():
 #     fname = 'ste'
-#     test1 = validate(fname)
+#     test1 = Validate(fname)
 #     assert test1.read_csv() == 'ste', 'FAIL'
 
 # Tests the CSV data is formatted into the correct data model
 def test_csv_format():
-    test = validate(test_csv_fname)
+    test = Validate(test_csv_fname)
     assert test.read_csv() == [{'10.10.10.0/24': ('10.10.10.1', 'computer1.stesworld.com', '1a-1b-1c-1d-1e-1f')},
                                {'10.10.10.0/24': ('10.10.11.1', 'computer2.stesworld.com', '1a-1b-1c-1d-1e-1f')},
                                {'10.10.20.0/24': ('10.10.20.1', 'computer3.stesworld.org', '1a-1b1c-1z-1e-1f')}], 'Error with number of or empty columns'
@@ -25,7 +25,7 @@ def test_csv_format():
 # Tests badly formated network (scope) or IP address cause script to raise an error
 def test_verify_scope_ip(capsys):
     try:
-        test = validate(test_addr_fname)
+        test = Validate(test_addr_fname)
         test.read_csv()
         test.verify()
     except SystemExit:
@@ -42,7 +42,7 @@ def test_verify_scope_ip(capsys):
 # Tests badly formated domain name, MAC address or an IP not to be within the scope cause script to raise an error
 def test_verify_dom_mac_ipin(capsys):
     try:
-        test = validate(test_other_fname)
+        test = Validate(test_other_fname)
         test.read_csv()
         test.verify()
     except SystemExit:
@@ -59,7 +59,7 @@ def test_verify_dom_mac_ipin(capsys):
 
 # Tests the IP addresses are combined under scopes in the new data model
 def test_data_model():
-    test = validate(test_csv_fname)
+    test = Validate(test_csv_fname)
     test.read_csv()
     assert test.data_model() == [{'10.10.10.0': [('10.10.10.1', 'computer1.stesworld.com', '1a-1b-1c-1d-1e-1f'),
                                                  ('10.10.11.1', 'computer2.stesworld.com', '1a-1b-1c-1d-1e-1f')]},

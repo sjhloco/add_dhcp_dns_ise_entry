@@ -14,26 +14,30 @@ from pprint import pprint
 from getpass import getpass
 from pypsrp.client import Client
 from collections import defaultdict
+from pre_post_checks import Checks
 
-################# CSV format #################
+##################################  CSV format ##################################
 # ScopeId,IPAddress,Name,ClientId,Description
 # 10.10.10.0,10.10.10.10,Computer1.stesworld.com,1a-1b-1c-1d-1e-1f,Reserved for Computer1
 # 20.20.20.0,20.20.20.11,Computer2.stesworld.com,2a-2b-2c-2d-2e-2f,Reserved for Computer2
 
-################# Variables to change dependant on environment #################
+######################## Variables to change dependant on environment ########################
 # Where script will look for the csv, by default is the users home directory
 directory = expanduser("~")
 # domain_name expected for DHCP and DNS entries (must be upto last.)
 domain_name = "stesworld.com"
 
 # Servers that the script will run against
-dhcp_server = "10.30.10.81"
+dhcp_svr = "10.30.10.81"
 dns_server = "10.30.10.81"
 ise_admin = "10.30.10.81"
-servers = {'dhcp': dhcp_server, 'dns': dns_server, 'ise': ise_admin }
 
-################# Santiy check CSV #################
-class validate():
+temp_json = 'temp_json.json'        # Temp file used to return info to this moduel form the other modules
+temp_csv = 'temp_csv.csv'           # Temp CSV created and used by DHCP without prefix in the scope
+win_dir = 'C:\\temp'                # Temp location on DHCP server to copy and run the csv
+
+##################################  Santiy check CSV and its contents ##################################
+class Validate():
     def __init__(self, csv_file):
         self.csv_file = csv_file
         self.csv_output = []                            # Create a new list
@@ -60,9 +64,7 @@ class validate():
                     exit()
         self.csv_output = self.csv_output[1:]           # Removes the header column
         return self.csv_output                          # Used for pytest
-        # print(self.csv_output )
 
-################# Santiy check contents of data model #################
 # 3. Make sure that the details in the CSV are in a valid correct format, if not ends the script fails
     def verify(self):
         scope_error, ip_error, dom_error, mac_error, ip_in_net_error = ([] for i in range(5))    # Lists to store invalid elements
@@ -118,7 +120,8 @@ class validate():
         if len(scope_error) != 0 or len(ip_error) != 0 or len(dom_error) != 0 or len(mac_error) != 0 or len(ip_in_net_error) !=0:
             exit()
 
-################# Creates data model used in pre_post_checks script used to check if entry already exists #################
+################# Creates new data model used in pre_post_checks script used to check if entry already exists #################
+
 # 4. Combines all addresses with the same scope as values (ip, name, mac) under that Key (scope)
     def data_model(self):
         global csv_dm                   # New DM that wll be used in pre_post_checks
@@ -139,9 +142,10 @@ class validate():
 
 ################# Get login details and main menu from which tasks are run #################
 
-class main_menu():
+class Main_menu():
     def __init__(self, csv_dm):
         self.csv_dm = csv_dm
+        self.dhcp_dm = []               # Even though not used till pre_post_checks.py add here for pytest
 
     # 5. Collects login detais and tests that they are correct Assumed if works on one device will work on all
     def login(self):
@@ -162,50 +166,74 @@ class main_menu():
     def task(self, user, password):
         print('''
 What type of task is being performed?'
-1. Add DHCP and DNS entries
-2. Delete DHCP and DNS entries
-3. Add DHCP, DNS and ISE entries
-4. Delete DHCP, DNS and ISE entries''')
-        task = input("Enter a number: ")
+1. Add DHCP Entry
+2. Delete DHCP entry
+''')
+# 1. Add DHCP and DNS entries
+# 2. Delete DHCP and DNS entries
+# 3. Add DHCP, DNS and ISE entries
+# 4. Delete DHCP, DNS and ISE entries
 
+        task = input("Enter a number: ")
         while True:
             if task == '1':
-                print(1)
-                create = True
+                # WILL RUN FAILFAST and CHECKS FOR BOTH DHCP AND DNS so user knows all errors for all systmes
+                type = 'add'
+                # Instanise the different tasks classes
+                dhcp = Checks(csv_file, directory, user, password, self.csv_dm, self.dhcp_dm, type, dhcp_svr)
+                # dns = x
+                # Make sure that scopes or domains exist, if not fail imediatley - NEED TO RUN BOTH FAILFAST
+                dhcp.failfast()
+                # dns.failfast()
+                # Check for already existing DHCP or DNS entires, if so fail - NEED TO RUN BOTH CHECKS
+                dhcp.dhcp()
+                # dns.dns()
+
+
+                # create = True
                 break
-            elif task == '2':
-                print(2)
-                create = False
-                break
-            elif task == '3':
-                print(3)
-                create = True
-                break
-            elif task == '4':
-                print(4)
-                create = False
-                break
+            # elif task == '2':
+            #     print(2)
+            #     create = False
+            #     break
+            # elif task == '3':
+            #     print(3)
+            #     create = True
+            #     break
+            # elif task == '4':
+            #     print(4)
+            #     create = False
+            #     break
             else:
                 task = input("Not recognised, enter a valid number: ")
+
+################# TASKS - runs external modules #################
+# 7. Run the tasks dependant on the user unput.
+
+    # def task_dhcp(self)
+
+
+
 
 ###################################### Run the scripts ######################################
 # 1. Starts the script taking input of CSV file name
 
 def main():
     fname = argv[1]                                 # Creates varaible from the arg passed in when script run (csv file)
+    global csv_file
     csv_file = os.path.join(directory, fname)       # Creates full path to the csv using directory variable
-    validation = validate(csv_file)
+    validation = Validate(csv_file)
 
     # Runs function 2 to validate format of the CSV
     validation.read_csv()
     # Runs function 3 to validate format of the CSV contents
-    # validation.verify()
-    # # Runs function 4 to create the new data model from the CSV data
-    # validation.data_model()
+    validation.verify()
+    # Runs function 4 to create the new data model from the CSV data
+    validation.data_model()
 
     # Runs function 5 and 6 to get logon credentails and load main menu
-    # tasks = main_menu(csv_dm)
-    # tasks.login()
+    tasks = Main_menu(csv_dm)
+    tasks.login()
 
 if __name__ == '__main__':
     main()
