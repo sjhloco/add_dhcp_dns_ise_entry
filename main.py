@@ -244,7 +244,8 @@ What type of task is being performed?
             exit()
 
         # Fails if any of the reservations exist ('add') or dont already exist ('remove')
-        dhcp_verify_pre = dhcp.verify()
+        dhcp_dm = dhcp.get_resv()
+        dhcp_verify_pre = dhcp.verify_csv_vs_dhcp(dhcp_dm)
         if type == 'add':
             if len(dhcp_verify_pre['used_reserv']) != 0:    # List of CSV entries that are currently in DHCP should be 0
                 print("!!! Error - These entries already exist, you must delete the duplicates before can run the script.")
@@ -258,13 +259,15 @@ What type of task is being performed?
 
         # Add or remove DHCP entires and verify outcome is as expected compared with DHCP state before the change
         error = 'NO'
-        dhcp_create = dhcp.create(csv_file, type, temp_csv, win_dir)
+        dhcp.create_new_csv(csv_file, temp_csv)
+        dhcp_create = dhcp.deploy_csv(type, temp_csv, win_dir)
         if dhcp_create[1] is True:          # Error handling based on output returned from DHCP server
             "!!! Warning - Was maybe an issue with the config commands sent to the DHCP server."
         if dhcp_create[2] != 0:             # Error handling based on output returned from DHCP server
             "!!! Warning - Was maybe an issue with the reservations/ CSV file sent to the DHCP server."
         # Verification that all reservations have been added ('add') or removed('remove')
-        dhcp_verify_post = dhcp.verify()
+        dhcp_dm = dhcp.get_resv()
+        dhcp_verify_post = dhcp.verify_csv_vs_dhcp(dhcp_dm)
         print("Check and confirm the numbers below add up to what you would expect.")
         print("Num Entries in CSV: {}, Num Reservations Before: {}, Num Reservations After: {}".format(dhcp_create[0], dhcp_verify_pre['len_csv'], dhcp_verify_post['len_csv']))
         if type == 'add':
@@ -278,7 +281,7 @@ What type of task is being performed?
                 pprint(dhcp_verify_post['missing_resv'])
                 error = 'YES'
 
-        if error == 'No':
+        if error == 'NO':
             print("DHCP server transaction completed successfully")
             exit()
 

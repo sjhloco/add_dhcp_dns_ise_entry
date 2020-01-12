@@ -14,20 +14,18 @@
 ### 2a. win_dhcp.py: Using DM from main.py to check against DHCP server
 -Add failfast function if the DHCP scope does not exist
 -Add pre-checks/ post-checks to verify if entries shouldnt exist (add DHCP) or should exist (remove DHCP)
+-Pytests for functions
 **COMPLETED**
 
--Redo pytests, need to soemhow mock connecting to DHCP server?
--Write up notes doc on how can use the tools to get info with powershell\
-**INPROGRESS**
+**NOT STARTED**
+Need to chaneg DHCP failfast to use Get-DhcpServerv4Scope 10.10.10.0
 
 ### 2b. win_dhcp.py: Add or remove entries to DHCP
 -Reformat CSV to remove /prefix from the scope
 -Add/remove entries DHCP from DHCP server
+-Pytests for functions (only the reformatting of the CSV)
 !!! If the name, IP or mac already exists in DHCP it wont let you add the entry !!!!
 **COMPLETED**
-
-**NOT STARTED**
---Do pytests, need to soemhow mock connecting to DHCP server?
 
 ### 3a. win_dns.py: check against DNS server
 -Add failfast function if the DNS or PTR zone do not exist

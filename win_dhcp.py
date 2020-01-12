@@ -40,7 +40,7 @@ class Dhcp():
             return '!!! Error - These scopes dont exist on the DHCP server: {}'.format(bad_scopes)
 
 ###################################### Get DHCP reservations ######################################
-    def verify(self):
+    def get_resv(self):
         dhcp_dm = []
         # On a per-scope gets all the current DHCP addresses that will then be compared to those in the CSV
         for csv_dict in self.csv_dm:
@@ -59,8 +59,10 @@ class Dhcp():
                 for r in dhcp_reserv:
                     ip_name_mac.append((r.split()[0], r.split()[3][:17].lower(), r.split()[2].lower()))
                 dhcp_dm.append({scope: ip_name_mac})
+        return dhcp_dm
 
 ###################################### Compare new Vs current resv ######################################
+    def verify_csv_vs_dhcp(self, dhcp_dm):
         csv_ip, csv_name, csv_mac, dhcp_ip, dhcp_name, dhcp_mac, dhcp_ip_name_mac = ([] for i in range(7))
         #Create a list of IPs, domain names and MACs from each DM
         for dict_scope in self.csv_dm:
@@ -108,8 +110,8 @@ class Dhcp():
         output = {'len_csv': len(dhcp_ip_name_mac), 'used_reserv': list(used_reserv), 'missing_resv': missing_resv}
         return output
 
-###################################### Creates the DHCP reservations ######################################
-    def create(self,csv_file, type, temp_csv, win_dir):
+###################################### Creates new CSV with no scope prefix  ######################################
+    def create_new_csv(self,csv_file, temp_csv):
         # Creates a new list from the CSV with prefix removed from the scope
         new_csv = []
         with open(csv_file, 'r') as x:
@@ -120,12 +122,24 @@ class Dhcp():
                 else:
                     row[0] = (row[0].split('/')[0])         # Removes prefix from the scope
                     new_csv.append(row)
-        num_new_entries = len(new_csv) - 1                  # Number of reservatiosn to be added
+        self.num_new_entries = len(new_csv) - 1                  # Number of reservatiosn to be added
         # Writes the new list to a temp csv file
         with open(temp_csv, 'w') as x:
             writer = csv.writer(x)
             for row in new_csv:
                 writer.writerow(row)
+            csv_read = csv.reader(x)
+
+        # Used only with pytest to test new CSV file created and the contents are correct
+        pytest_csv = []
+        with open(temp_csv, 'r') as x:
+            csv_read = csv.reader(x)
+            for row in csv_read:
+                pytest_csv.append(row)
+        return pytest_csv
+
+###################################### Adds or Removes the DHCP reservations ######################################
+    def deploy_csv(self, type, temp_csv, win_dir):
         # Copy the new CSV File onto DHCP server, script will fail if it cant
         try:
             self.client_conn.copy(temp_csv, win_dir)
@@ -141,7 +155,7 @@ class Dhcp():
             elif type == 'remove':
                 ps.add_cmdlet("Import-Csv").add_argument("{}".format(win_dir)).add_cmdlet("Remove-DhcpServerv4Reservation")
             ps.invoke()
-        output = [num_new_entries, ps.had_errors, ps.streams.error]
+        output = [self.num_new_entries, ps.had_errors, ps.streams.error]
 
         # Cleanup temp files
         os.remove(temp_csv)
@@ -157,7 +171,7 @@ class Dhcp():
 
 # dhcp_svr = "10.30.10.81"
 # user = "Administrator"
-# password = "mango12!"
+# password = ""
 # csv_dm = [{'10.10.10.0': [('10.10.10.1', 'computer1.stesworld.com', '1a-1b-1c-1d-1e-1f'), ('10.10.10.3', 'computer3.stesworld.com', '3a-3b-3c-3d-3e-3f'), ('10.10.10.5', 'computer5.stesworld.com', '5a-5b-5c-5d-5e-5f')]},
 #           {'20.20.20.0': [('20.20.20.2', 'computer2.stesworld.com', '2a-2b-2c-2d-2e-2f'), ('20.20.20.4', 'computer4.stesworld.com', '4a-4b-4c-4d-4e-4f'), ('20.20.20.8', 'computer8.stesworld.com', '8a-8b-8c-8d-8e-8f')]},
 #           {'30.30.30.0': [('30.30.30.6', 'computer6.stesworld.com', '6a-6b-6c-6d-6e-6f'), ('30.30.30.7', 'computer7.stesworld.com', '7a-7b-7c-7d-7e-7f')]}]
