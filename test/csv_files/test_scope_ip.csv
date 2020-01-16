@@ -1,2 +1,2 @@
-ScopeId,IPAddress,Name,ClientId,Description
-10.10.999.0/24,10.999.20.1,Computer5.stesworld.com,1a-1b-1c-1d-1e-1f,Reserved for Computer1
+ScopeId,IPAddress,Name,ClientId,Description,ttl
+10.10.999.0/24,10.999.20.1,Computer5.stesworld.com,1a-1b-1c-1d-1e-1f,Reserved for Computer1,60

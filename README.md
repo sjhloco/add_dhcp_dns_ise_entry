@@ -18,7 +18,7 @@
 **COMPLETED**
 
 **NOT STARTED**
-Need to chaneg DHCP failfast to use Get-DhcpServerv4Scope 10.10.10.0
+Need to chaneg DHCP failfast to use Get-DhcpServerv4Scope 10.10.10.0 as just need to look for scopes, not reservations
 
 ### 2b. win_dhcp.py: Add or remove entries to DHCP
 -Reformat CSV to remove /prefix from the scope
@@ -28,28 +28,41 @@ Need to chaneg DHCP failfast to use Get-DhcpServerv4Scope 10.10.10.0
 **COMPLETED**
 
 ### 3a. win_dns.py: check against DNS server
--Add failfast function if the DNS or PTR zone do not exist
--Add pre-checks/ post-checks to verify if A Record PTR entries shouldnt exist (add DNS) or should exist (remove DNS)
--Create pytests
+-Have edited main.py so returns correct DMs for fowrad and reverse zones
+-Basic cmds for connected to DSN server
+**COMPLETED**
+
 **NOT STARTED**
+-edit responce back from DNS server
+-Add pre-checks/ post-checks to verify if A Record PTR entries shouldnt exist (add DNS) or should exist (remove DNS)
+-Add failfast function if the DNS or PTR zone do not exist
+-Create pytests
+
 
 ### 3b. win_dns.py: Add or remove the new entries to DNS
--Add/remove entries DHCP from DHCP server
--Create pytests
+
 **NOT STARTED**
+-Add/remove entries DNS from DNS server
+-Create pytests
+
 
 ### 4. main.py: Main menu
--Need to refactor it so have all the different options but not too complicated and DRY!!!!!
+
 **NOT STARTED**
+-Need to refactor it so have all the different options but not too complicated and DRY!!!!!
+
 
 ### 3a. cisco_ise.py: check against ISE
+
+**NOT STARTED**
 -Build test ISE lab
 -Add failfast function, need ot decide what???
 -Add pre-checks/ post-checks to verify if what???
 -Create pytests
-**NOT STARTED**
+
 
 ### 3b. win_dns.py: Add or remove the new entries to ISE
+
+**NOT STARTED**
 -Add/remove endhost entries in ISE
 -Create pytests
-**NOT STARTED**

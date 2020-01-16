@@ -1,10 +1,4 @@
-############ DNS checking ###############
-# 3. Check that the domain names dont already have a A record
-# 4. Check that the addresses dont already have a PTR record
 
-1. Create new data structures
-From csv_file: {forward_zone: [(name_with_no_domain 10.30.10.81), (name_with_no_domain: 10.30.10.81)]
-From csv_dm: {reverse_zone: [(full_name, non_network_ip)
 
 =A Records
 HostName                  RecordType Type       Timestamp            TimeToLive      RecordData
