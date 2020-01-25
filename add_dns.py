@@ -48,7 +48,8 @@ Import-CSV C:\Scripts\DNSentries.csv | %{ Remove-DnsServerResourceRecord -ZoneNa
 Cmd to add 1 entry is:
 Add-DnsServerResourceRecordA -Name "host23" -ZoneName "contoso.com" -IPv4Address "172.18.99.23" -TimeToLive 01:00:00 -CreatePtr
 
-
+# good script if you were goign to use a powershell script to get the reservatiosn, so push the lloop to the windows server
+# http://sigkillit.com/2015/10/27/list-all-dns-records-with-powershell/
 
 #Is already a module for DNS:
 #https://docs.ansible.com/ansible/latest/modules/win_dns_record_module.html#win-dns-record-module

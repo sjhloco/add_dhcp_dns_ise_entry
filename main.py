@@ -26,7 +26,7 @@ from win_dhcp import Dhcp
 directory = expanduser("~")
 # domain_name expected for DHCP and DNS entries (must be upto last.)
 domain_name = "stesworld.com"
-default_ttl = 3600      # in seconds
+default_ttl = '01:00:00'      # hh:mm:ss, default is 1 hour
 
 # Servers that the script will run against
 dhcp_svr = "10.30.10.81"
@@ -54,24 +54,25 @@ class Validate():
             for row in csv_read:
                 if len(row) == 0 or all(0 == len(s) for s in row):      #If it is a blank line skips or all blank columns
                     continue
-                elif len(row) != 6:                     # If there are not 5 columns in every row script fails
+                elif len(row) != 6:                     # If there are not 6 columns in every row script fails
                     print("!!!ERROR - The CSV is in invalid, check every row has 6 columns and rerun")
                     exit()
-                elif len(row[5]) != 0:          # Errors and exits if the TTL is not a decimal value
-                    try:
-                        row[5] = int(row[5])
+                elif len(row[5]) != 0:          # Errors and exits if the TTL is not valid format up to max of 23:59:59
+                    # try:
+                    #     assert re.match(r'^[0-2][0-3]:[0-5][0-9]:[0-5][0-9]', row[5])
                         csv_temp.append(row)
-                    except:
-                        print("!!!ERROR - The TTL must be a decimal value. Check '{}' in the below entry:\n{}".format(row[5], row))
+                    # except:
+                    #     print("!!!ERROR - The TTL is not valid format. Check '{}' in the below entry:\n{}".format(row[5], row))
                 elif len(row[5]) == 0:                  # Adds default TTL value if blank
                     row[5] = default_ttl
                     csv_temp.append(row)
-                else:
-                    csv_temp.append(row)
+                # else:
+                #     csv_temp.append(row)
 
             # As long as all columns have values creates variables from the CSV to be used by the different modules
             for row in csv_temp:
-                if all(0 != len(s) for s in row[:4]):
+                # if all(0 != len(s) for s in row[:4]):
+                if all(0 != len(s) for s in row):
                     # DHCP: Creates a list of dicts with key:scope, value:(ip, dom and mac) - also makes sure mac and domain are lowercase
                     csv_dhcp_output.append({row[0]: (row[1], row[2].lower(), row[3].lower())})
                     # DNS_FW: Creates a list of dicts with key:DNS_forward_zone, value: (ip, name_no_domain. ttl)
@@ -86,7 +87,7 @@ class Validate():
 
 # 3. Make sure that the details in the CSV are in a valid correct format, if not ends the script fails
     def verify(self):
-        scope_error, ip_error, dom_error, mac_error, ip_in_net_error = ([] for i in range(5))    # Lists to store invalid elements
+        scope_error, ip_error, dom_error, mac_error, ip_in_net_error, ttl_error = ([] for i in range(6))    # Lists to store invalid elements
 
         # Validates the CSV contents are valid, creating lists of non-valid elements
         for x in csv_dhcp_output:
@@ -103,17 +104,23 @@ class Validate():
             # Checks domain names are in a valid format (ends with domain_name variable)
             domain = '.'.join(list(x.values())[0][1].split('.')[1:])      # Gets everything after first .
             if domain != domain_name:
-                dom_error.append(list(x.values())[0][1])
+                dom_error.append(x)
             # Checks if MAC address is in a valid format (xx-xx-xx-xx-xx-xx) with valid characters (0-9, a-f)
             try:
-                re.match(r'([a-fA-F0-9]{2}-){5}([a-fA-F0-9]{2})', list(x.values())[0][2]).group()
+                assert re.match(r'([a-fA-F0-9]{2}-){5}([a-fA-F0-9]{2})', list(x.values())[0][2])
             except:
-                mac_error.append(list(x.values())[0][2])
+                mac_error.append(x)
             # Checks the IP address is within the scopes network address
             if len(scope_error) == 0 and len(ip_error) == 0:
                 if ip_address(list(x.values())[0][0]) not in ip_network(list(x.keys())[0]):
                     ip_in_net_error.append(list(x.values())[0][0] +  ' not in ' + list(x.keys())[0])
 
+        # Checks if TTL is in a valid format (hh:mm:ss) with valid characters (max of 23:59:59)
+        for x in csv_dns_fw_output:
+            try:
+                assert re.match(r'^[0-2][0-3]:[0-5][0-9]:[0-5][0-9]', list(x.values())[0][2])
+            except:
+                ttl_error.append(x)
         # Exits script listing issues if any of the above conditions cause an error (list not empty)
         if len(scope_error) != 0:
             print("!!!ERROR - Invalid scope addresses entered !!!")
@@ -135,6 +142,10 @@ class Validate():
             print("!!!ERROR - IP address not a valid IP address in DHCP scope !!!")
             for x in ip_in_net_error:
                 print(x)
+        if len(ttl_error) != 0:
+            print("!!!ERROR - The TTL is not in a valid format, must be hh:mm:ss upto a maximum of 23:59:59 !!!")
+            for x in ttl_error:
+                print(x)
 
         if len(scope_error) != 0 or len(ip_error) != 0 or len(dom_error) != 0 or len(mac_error) != 0 or len(ip_in_net_error) !=0:
             exit()
@@ -147,10 +158,10 @@ class Validate():
         for entry in self.csv_dns_rv_output1:
             net, host = ([] for i in range(2))
             #NETWORK: Get network address, split each octet up and remove the prefix
-            net1 = re.split('\.|/', str(ip_network(entry[0], strict=False)))
+            net1 = re.split(r'\.|/', str(ip_network(entry[0], strict=False)))
             #HOST: Split each octet up and remove the prefix
-            host1 = re.split('\.|/', entry[0])
-            # Dependant on the prefix length createss the reverse lookup zone and host address octets
+            host1 = re.split(r'\.|/', entry[0])
+            # Dependant on the prefix length creates the reverse lookup zone and host address octets
             if int(net1[4]) >= 24:
                 # reverse lookup zone created by adding first 3 octets in reverse order
                 net.append('.'.join([net1[2], net1[1], net1[0], 'in-addr.arpa']))
@@ -201,7 +212,7 @@ class Main_menu():
             try:
                 self.user = input("Enter your username: ")
                 self.password = getpass()
-                # Test credentials by running simple cmd on the DHCP serber
+                # Test credentials by running simple cmd on the DHCP server
                 conn = Client(dhcp_svr, username=self.user, password=self.password,ssl=False)
                 conn.execute_cmd('ipconfig')
                 self.task()       # Runs next function (6)
@@ -356,16 +367,16 @@ def main():
     # Runs function 3 to validate format of the CSV contents
     validation.verify()
     # Runs function 4 to create reverse lookup DM format from CSV data
-    validation.dns_rv()
+    # validation.dns_rv()
 
-    # Runs function 5 to create the new combineed  dictionary DMs for DHCP and DNS that are used for pre/post checks
-    csv_dhcp_dm = validation.make_data_model(csv_dhcp_output)
-    csv_dns_fw_dm = validation.make_data_model(csv_dns_fw_output)
-    csv_dns_rv_dm = validation.make_data_model(csv_dns_rv_output)
+    # # Runs function 5 to create the new combineed  dictionary DMs for DHCP and DNS that are used for pre/post checks
+    # csv_dhcp_dm = validation.make_data_model(csv_dhcp_output)
+    # csv_dns_fw_dm = validation.make_data_model(csv_dns_fw_output)
+    # csv_dns_rv_dm = validation.make_data_model(csv_dns_rv_output)
 
-    # Runs function 6 and 7 to get logon credentails and load main menu
-    tasks = Main_menu(csv_dhcp_dm, csv_dns_fw_dm, csv_dns_rv_dm)
-    tasks.login()
+    # # Runs function 6 and 7 to get logon credentails and load main menu
+    # tasks = Main_menu(csv_dhcp_dm, csv_dns_fw_dm, csv_dns_rv_dm)
+    # tasks.login()
 
 
 

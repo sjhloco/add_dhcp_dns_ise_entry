@@ -25,7 +25,7 @@ class Dns():
     # Check if scopes exist on DHCP server
     def failfast(self):
         pass
-###################################### Get DHCP reservations ######################################
+###################################### Get DNS reservations ######################################
     def get_record(self):
         dns_fw_dm, dns_rv_dm = ([] for i in range(2))
 
@@ -41,7 +41,18 @@ class Dns():
                     ps.invoke()
                     dns_fw_records = ps.output
 
-        for csv_dns_rv in self.csv_dns_rv_dm :
+                # From the ps output create a list for the dns_fw DM dict value [('ip', 'name', ttl)]
+                ip_name_ttl = []
+                if len(dns_fw_records) == 0:                # creates dummy objects if no entries in the rv zone
+                    ip_name_ttl.append(('dummy', 'dummy'))
+                else:
+                    for a in dns_fw_records[4:-2]:          # Elimates headers and trailing blank lines
+                        a = a.split()
+                        ip_name_ttl .append((a[-1], a[0].lower(), a[-2]))
+                    # Add the list as the value for for a dict where the zone name is the key [{fw_zone: [(ip, name, ttl)]}]
+                    dns_fw_dm.append({domain: ip_name_ttl})
+
+        for csv_dns_rv in self.csv_dns_rv_dm:
             for rev_zone in csv_dns_rv.keys():
                 # Get list of all reservations in the scope
                 with RunspacePool(self.wsman_conn) as pool:
@@ -52,56 +63,19 @@ class Dns():
                     ps.invoke()
                     dns_rv_records = ps.output
 
+                    # From the ps output create a list for the dns_rv DM dict value [(host, domain_name)]
+                    hst_name = []
+                    if len(dns_rv_records) == 0:    # creates dummy objects if no entries in the rv zone
+                        hst_name.append(('dummy', 'dummy'))
+                    else:
+                        for ptr in dns_rv_records[3:-2]:        # Elimates headers and trailing blank lines
+                            ptr = ptr.split()
+                            hst_name.append((ptr[0], ptr[-1].lower()))
+                    # Add the list as the value for for a dict where the rv_zone name is the key [{rv_zone: [(host, domain_name)]}]
+                    dns_rv_dm.append({rev_zone: hst_name})
 
-        pprint(dns_fw_records)
-        pprint(dns_rv_records)
-
-# dns_fw_records = ['',
-#  'HostName                  RecordType Type       Timestamp            '
-#  'TimeToLive      RecordData                         ',
-#  '--------                  ---------- ----       ---------            '
-#  '----------      ----------                         ',
-#  '@                         A          1          1/16/2020 7:00:00 AM '
-#  '00:10:00        10.30.10.81                        ',
-#  'computer1                 A          1          0                    '
-#  '01:00:00        10.10.10.1                         ',
-#  'dc1                       A          1          0                    '
-#  '01:00:00        10.30.10.81                        ',
-#  'DomainDnsZones            A          1          1/16/2020 7:00:00 AM '
-#  '00:10:00        10.30.10.81                        ',
-#  'ForestDnsZones            A          1          1/16/2020 7:00:00 AM '
-#  '00:10:00        10.30.10.81                        ',
-#  'win10-domain              A          1          11/25/2017 12:00:... '
-#  '00:20:00        10.10.20.135                       ',
-#  'WIN7-DOMAIN               A          1          11/25/2017 12:00:... '
-#  '00:20:00        10.10.20.134                       ',
-#  '',
-#  '']
-
-# dns_rv_records = ['',
-#  'HostName                  RecordType Type       Timestamp            '
-#  'TimeToLive      RecordData                         ',
-#  '--------                  ---------- ----       ---------            '
-#  '----------      ----------                         ',
-#  '20.200                    PTR        12         0                    '
-#  '01:00:00        ste1.steuniverse.com.              ',
-#  '',
-#  '']
-
-
-
-
-
-
-        #         # From the ps output create a DHCP DM of scope: [[IP], [mac], [name], [(IP, MAC, name)]]
-        #         ip_name_mac = []
-        #         for r in dhcp_reserv:
-        #             ip_name_mac.append((r.split()[0], r.split()[3][:17].lower(), r.split()[2].lower()))
-        #         dhcp_dm.append({scope: ip_name_mac})
-        # return dhcp_dm
-
-
-
+        pprint(dns_rv_dm)
+        pprint(dns_fw_dm)
 
 ###################################### Compare new Vs current resv ######################################
     def verify_csv_vs_dhcp(self, dhcp_dm):
@@ -124,6 +98,10 @@ csv_dns_fw_dm = [{'stesworld.com': [('10.10.10.43', 'computer43', 3600),
                                 ('20.20.20.44', 'computer44', 3600),
                                 ('10.10.10.45', 'computer45', 3600),
                                 ('172.16.48.5', 'computer46', 3600)]}]
+
+
+
+
 csv_dns_rv_dm = [{'10.10.10.in-addr.arpa': [('43', 'computer43.stesworld.com.'),
                                         ('45', 'computer45.stesworld.com.')]},
              {'20.20.20.in-addr.arpa': [('44', 'computer44.stesworld.com.')]},
