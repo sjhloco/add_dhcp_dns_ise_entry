@@ -64,10 +64,10 @@ def test_verify_dom_mac_ipin(capsys):
 def test_dns_rv():
     test = Validate(test_csv_fname)
     test.read_csv()
-    assert test.dns_rv() == ([{'10.10.in-addr.arpa': ('1.42', 'computer1.stesworld.com.')},
+    assert test.dns_rv() == ([{'10.10.in-addr.arpa': ('42.11', 'computer1.stesworld.com.')},
                               {'8.in-addr.arpa': ('8.8.8', 'computer2.stesworld.com.')},
-                              {'16.172.in-addr.arpa': ('16.5', 'computer3.stesworld.org.')},
-                              {'16.172.in-addr.arpa': ('16.30', 'computer3.stesworld.org.')},
+                              {'16.172.in-addr.arpa': ('5.48', 'computer3.stesworld.org.')},
+                              {'16.172.in-addr.arpa': ('30.48', 'computer3.stesworld.org.')},
                               {'1.168.192.in-addr.arpa': ('42', 'computer3.stesworld.org.')}]), 'Error with DNS reverse zone formatting'
 
 # Tests the IP addresses are combined under scopes in the new data model

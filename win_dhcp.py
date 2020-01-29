@@ -22,14 +22,16 @@ class Dhcp():
 ###################################### FAILFAST ######################################
     # Check if scopes exist on DHCP server
     def failfast(self):
+        print("Checking scopes exist on the DHCP server...")
         bad_scopes = []
         for csv_dict in self.csv_dhcp_dm:
             for scope in csv_dict.keys():
+                print(scope)
                 # Get list of all reservations in the scope
                 with RunspacePool(self.wsman_conn) as pool:
                     ps = PowerShell(pool)
                     # The powershell cmd is "Get-DhcpServerv4Reservation -scopeid 192.168.200.0"
-                    ps.add_cmdlet("Invoke-Expression").add_parameter("Command", "Get-DhcpServerv4Reservation -scopeid {}".format(scope))
+                    ps.add_cmdlet("Invoke-Expression").add_parameter("Command", "Get-DhcpServerv4Scope -scopeid {}".format(scope))
                     ps.add_cmdlet("Out-String").add_parameter("Stream")
                     ps.invoke()
                     dhcp_reserv = ps.output
@@ -57,15 +59,18 @@ class Dhcp():
 
                 # From the ps output create a DHCP DM of scope: [[IP], [mac], [name], [(IP, MAC, name)]]
                 ip_name_mac = []
-                for r in dhcp_reserv:
-                    ip_name_mac.append((r.split()[0], r.split()[3][:17].lower(), r.split()[2].lower()))
-                dhcp_dm.append({scope: ip_name_mac})
+                if len(dhcp_reserv) == 0:                # skips if no DHCP reservations in the scope
+                    pass
+                else:
+                    for r in dhcp_reserv:
+                        ip_name_mac.append((r.split()[0], r.split()[3][:17].lower(), r.split()[2].lower()))
+                    dhcp_dm.append({scope: ip_name_mac})
         return dhcp_dm
 
 ###################################### Compare new Vs current resv ######################################
     def verify_csv_vs_dhcp(self, dhcp_dm):
         csv_ip, csv_name, csv_mac, dhcp_ip, dhcp_name, dhcp_mac, dhcp_ip_name_mac = ([] for i in range(7))
-        #Create a list of IPs, domain names and MACs from each DM
+        #Create a list of IPs, domain names and MACs from each DM (CSV and from dhcp_srv)
         for dict_scope in self.csv_dhcp_dm:
             for all_values in dict_scope.values():
                 for each_value in all_values:
@@ -107,13 +112,13 @@ class Dhcp():
         # Compares IPs in CSV to IPs on DHCP server, will list any in the CSV that are missing from DHCP server
         missing_resv = set(csv_ip) - set(dhcp_ip)
 
-        # What is returned to main.py to kill script if any duplicates
+        # What is returned to main.py to kill script if any duplicates. len(csv_name) is used to compare pre and post number of entries
         output = {'len_csv': len(dhcp_ip_name_mac), 'used_reserv': list(used_reserv), 'missing_resv': missing_resv}
         return output
 
 ###################################### Creates new CSV with no scope prefix  ######################################
     def create_new_csv(self,csv_file, temp_csv):
-        # Creates a new list from the CSV with prefix removed from the scope
+        # # Creates a new list from the CSV with prefix removed from the scope
         new_csv = []
         with open(csv_file, 'r') as x:
             csv_read = csv.reader(x)
@@ -129,7 +134,6 @@ class Dhcp():
             writer = csv.writer(x)
             for row in new_csv:
                 writer.writerow(row)
-            csv_read = csv.reader(x)
 
         # Used only with pytest to test new CSV file created and the contents are correct
         pytest_csv = []
@@ -144,7 +148,7 @@ class Dhcp():
         # Copy the new CSV File onto DHCP server, script will fail if it cant
         try:
             self.client_conn.copy(temp_csv, win_dir)
-        except Exception as e:              # If login fails loops to begining displaying this error message
+        except Exception as e:                  # If copy fails script fails
             print("!!! Error - Could not copy CSV file to DHCP server, investigate the below error before re-running the script.\n{}".format(e))
             exit()
 
@@ -162,7 +166,7 @@ class Dhcp():
         os.remove(temp_csv)
         try:
             self.client_conn.execute_cmd("del {}".format(win_dir.replace("/", "\\")))      # Windows wont take / format with the cmd
-        except Exception as e:              # If login fails loops to begining displaying this error message
+        except Exception as e:              # If delete fails warns user
             print("!!! Warning - Could not delete temporary file {} off DHCP server, you will have to do manually.\n{}".format(win_dir, e))
 
         return output
@@ -179,13 +183,15 @@ class Dhcp():
 # dhcp_dm = [{'10.10.10.0': [('10.10.10.5', 'computer5.steswor', '5a-5b-5c-5d-5e-5f'), ('10.10.10.10', 'computer10.steswo', '1f-1f-1f-1f-1f-1f')]},
 #            {'20.20.20.0': [('20.20.20.4', 'computer4.steswor', '4a-4b-4c-4d-4e-4f'), ('20.20.20.10', 'computer20.steswo', '1e-1e-1e-1e-1e-1e')]},
 #            {'30.30.30.0': [('30.30.30.6', 'computer6.steswor', '6a-6b-6c-6d-6e-6f'), ('30.30.30.10', 'computer30.steswo', '1d-1d-1d-1d-1d-1d')]}]
-# csv_file = "/Users/mucholoco/test.csv"
+# csv_file = "/Users/mucholoco/test_dns.csv"
 # type = "add"
 # temp_csv = "/Users/mucholoco/temp_csv.csv"
 # win_dir = os.path.join('C:\\temp', os.path.split(temp_csv)[1])
 
 # dhcp = Dhcp(dhcp_svr, user, password, csv_dhcp_dm)
-# dhcp.verify(dhcp_dm)
-# create(csv_file, type, temp_csv, win_dir)
-
+# dhcp.verify_csv_vs_dhcp(dhcp_dm)
+# a = dhcp.create_new_csv(csv_file, temp_csv)
+# a = dhcp.failfast()
+# a = dhcp.get_resv()
+# pprint(a)
 

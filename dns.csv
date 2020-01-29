@@ -1,0 +1,4 @@
+Add-DnsServerResourceRecordA -Name "host251" -ZoneName "stesworld.com" -IPv4Address "10.10.10.251" -TimeToLive 01:00:00 -CreatePtr
+Import-Csv -Path "C:\temp\dns.csv" | Add-DNSServerResourceRecordA
+Name,ZoneName,IPv4Address,TimeToLive
+host252,stesworld.com,10.10.10.252,01:00:00

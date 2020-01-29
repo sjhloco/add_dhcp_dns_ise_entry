@@ -15,6 +15,7 @@ from getpass import getpass
 from pypsrp.client import Client
 from collections import defaultdict
 from win_dhcp import Dhcp
+from win_dns import Dns
 
 ##################################  CSV format ##################################
 # ScopeId,IPAddress,Name,ClientId,Description
@@ -24,8 +25,8 @@ from win_dhcp import Dhcp
 ######################## Variables to change dependant on environment ########################
 # Where script will look for the csv, by default is the users home directory
 directory = expanduser("~")
-# domain_name expected for DHCP and DNS entries (must be upto last.)
-domain_name = "stesworld.com"
+# list of domain_names expected for DHCP and DNS entries (must be upto last.)
+domain_name = ["stesworld.com", "stesworld.co.uk"]
 default_ttl = '01:00:00'      # hh:mm:ss, default is 1 hour
 
 # Servers that the script will run against
@@ -33,9 +34,9 @@ dhcp_svr = "10.30.10.81"
 dns_svr = "10.30.10.81"
 ise_adm = "10.30.10.81"
 
-# Temp files used by DHCP
-temp_csv = os.path.join(directory, 'temp_csv.csv')                  # CSV with DHCP scope with prefixes removed
-win_dir = os.path.join('C:\\temp', os.path.split(temp_csv)[1])      # Location on DHCP server csv run from
+# Temp files used by DHCP or DNS deployment
+temp_csv = os.path.join(directory, 'temp_csv.csv')                  # CSV used to deploy DHCP/DNS
+win_dir = os.path.join('C:\\temp', os.path.split(temp_csv)[1])      # Location on DHCP/DNS server csv run from
 
 ##################################  Santiy check CSV and its contents ##################################
 class Validate():
@@ -57,21 +58,14 @@ class Validate():
                 elif len(row) != 6:                     # If there are not 6 columns in every row script fails
                     print("!!!ERROR - The CSV is in invalid, check every row has 6 columns and rerun")
                     exit()
-                elif len(row[5]) != 0:          # Errors and exits if the TTL is not valid format up to max of 23:59:59
-                    # try:
-                    #     assert re.match(r'^[0-2][0-3]:[0-5][0-9]:[0-5][0-9]', row[5])
-                        csv_temp.append(row)
-                    # except:
-                    #     print("!!!ERROR - The TTL is not valid format. Check '{}' in the below entry:\n{}".format(row[5], row))
                 elif len(row[5]) == 0:                  # Adds default TTL value if blank
                     row[5] = default_ttl
                     csv_temp.append(row)
-                # else:
-                #     csv_temp.append(row)
+                else:
+                    csv_temp.append(row)
 
             # As long as all columns have values creates variables from the CSV to be used by the different modules
             for row in csv_temp:
-                # if all(0 != len(s) for s in row[:4]):
                 if all(0 != len(s) for s in row):
                     # DHCP: Creates a list of dicts with key:scope, value:(ip, dom and mac) - also makes sure mac and domain are lowercase
                     csv_dhcp_output.append({row[0]: (row[1], row[2].lower(), row[3].lower())})
@@ -87,7 +81,7 @@ class Validate():
 
 # 3. Make sure that the details in the CSV are in a valid correct format, if not ends the script fails
     def verify(self):
-        scope_error, ip_error, dom_error, mac_error, ip_in_net_error, ttl_error = ([] for i in range(6))    # Lists to store invalid elements
+        scope_error, ip_error, mac_error, ip_in_net_error, all_domains, dom_error, ttl_error = ([] for i in range(7))    # Lists to store invalid elements
 
         # Validates the CSV contents are valid, creating lists of non-valid elements
         for x in csv_dhcp_output:
@@ -101,10 +95,6 @@ class Validate():
                 ip_address(list(x.values())[0][0])    # Convert to a list as dict_values object does not support indexing
             except ValueError as errorCode:
                 ip_error.append(str(errorCode))
-            # Checks domain names are in a valid format (ends with domain_name variable)
-            domain = '.'.join(list(x.values())[0][1].split('.')[1:])      # Gets everything after first .
-            if domain != domain_name:
-                dom_error.append(x)
             # Checks if MAC address is in a valid format (xx-xx-xx-xx-xx-xx) with valid characters (0-9, a-f)
             try:
                 assert re.match(r'([a-fA-F0-9]{2}-){5}([a-fA-F0-9]{2})', list(x.values())[0][2])
@@ -114,6 +104,16 @@ class Validate():
             if len(scope_error) == 0 and len(ip_error) == 0:
                 if ip_address(list(x.values())[0][0]) not in ip_network(list(x.keys())[0]):
                     ip_in_net_error.append(list(x.values())[0][0] +  ' not in ' + list(x.keys())[0])
+            # Adds all domain names to a list
+            domain = '.'.join(list(x.values())[0][1].split('.')[1:])      # Gets everything after first.
+            all_domains.append(domain)
+        # Checks domain names are in a valid format (ends with domain_name variable) by finding none duplicate elements
+        dom_error1 = set(all_domains) - set(domain_name)
+        if dom_error1 != 0:
+            for x in csv_dhcp_output:
+                for y in dom_error1:
+                    if y in list(x.values())[0][1]:
+                        dom_error.append(x)
 
         # Checks if TTL is in a valid format (hh:mm:ss) with valid characters (max of 23:59:59)
         for x in csv_dns_fw_output:
@@ -121,6 +121,7 @@ class Validate():
                 assert re.match(r'^[0-2][0-3]:[0-5][0-9]:[0-5][0-9]', list(x.values())[0][2])
             except:
                 ttl_error.append(x)
+
         # Exits script listing issues if any of the above conditions cause an error (list not empty)
         if len(scope_error) != 0:
             print("!!!ERROR - Invalid scope addresses entered !!!")
@@ -162,18 +163,18 @@ class Validate():
             #HOST: Split each octet up and remove the prefix
             host1 = re.split(r'\.|/', entry[0])
             # Dependant on the prefix length creates the reverse lookup zone and host address octets
-            if int(net1[4]) >= 24:
+            if int(net1[4]) >= 24:      # 24 or greater
                 # reverse lookup zone created by adding first 3 octets in reverse order
                 net.append('.'.join([net1[2], net1[1], net1[0], 'in-addr.arpa']))
-                # From the difference between (abs) 4th octet network and host address gets host address (just 1 octet)
-                host.append(str(abs(int(net1[3])-int(host1[3]))))
-            elif int(net1[4]) >= 16:
+                host.append(host1[3])
+            elif int(net1[4]) >= 16:        # 16 or greater
                 net.append('.'.join([net1[1], net1[0], 'in-addr.arpa']))
-                host.append('.'.join([str(abs(int(net1[2])-int(host1[2]))), str(abs(int(net1[3])-int(host1[3])))]))
-            elif int(net1[4]) >= 8:
+                host.append('.'.join([host1[3], host1[2]]))
+            elif int(net1[4]) >= 8:     # 8 or greater
                 net.append('.'.join([net1[0], 'in-addr.arpa']))
-                host.append('.'.join([str(abs(int(net1[1])-int(host1[1]))), str(abs(int(net1[2])-int(host1[2]))), str(abs(int(net1[3])-int(host1[3])))]))
+                host.append('.'.join([host1[3], host1[2], host1[1]]))
             csv_dns_rv_output.append({net[0]: (host[0], entry[1])})
+
         return csv_dns_rv_output
 
 ################# Creates new data model used in pre_post_checks script to check if entry already exists #################
@@ -204,7 +205,6 @@ class Main_menu():
         self.csv_dhcp_dm = csv_dhcp_dm
         self.csv_dns_fw_dm = csv_dns_fw_dm
         self.csv_dns_rv_dm = csv_dns_rv_dm
-
     # 6. Collects login detais and tests that they are correct Assumed if works on one device will work on all
     def login(self):
         self.complete = False                        # Used to keep loop going if entered credentials are wrong
@@ -241,23 +241,81 @@ What type of task is being performed?
             elif task == '2':
                 type = 'remove'
                 self.task_dhcp(type)
-            # elif task == '2':
-            #     print(2)
-            #     create = False
-            #     break
-            # elif task == '3':
-            #     print(3)
-            #     create = True
-            #     break
-            # elif task == '4':
-            #     print(4)
-            #     create = False
-            #     break
+            elif task == '3':
+                type = 'add'
+                self.task_dns(type)
+            elif task == '4':
+                type = 'remove'
+                self.task_dns(type)
             else:
                 task = input("Not recognised, enter a valid number: ")
 
 
 ################# TASKS - runs external modules #################
+    def task_dns(self, type):
+        # dns = Dns(dns_svr, 'ste', 'pa55w0rd!', self.csv_dns_fw_dm, self.csv_dns_rv_dm)        # For testing
+        dns = Dns(dns_svr, self.user, self.password, self.csv_dns_fw_dm, self.csv_dns_rv_dm)
+        # Fails if forward or reverse zones do not exist
+        print("DNS >> Checking the zones exist on the DNS server...")
+        dns_failfast = dns.failfast()
+        if dns_failfast != None:
+            print(dns_failfast)
+            exit()
+
+        # Fails if any of the FQDNs exist ('add') or dont already exist ('remove')
+        dns_dm = dns.get_record()
+        dns_verify_pre = dns.verify_csv_vs_dns(dns_dm[0], dns_dm[1])
+        if type == 'add':
+            if len(dns_verify_pre['used_fqdn']) != 0:    # List of CSV entries that are currently in DNS zones should be 0
+                print("!!! Error - These entries already exist on DNS server, you must delete the duplicates before can run the script.")
+                pprint(dns_verify_pre['used_fqdn'])
+                exit()
+        elif type == 'remove':
+            if len(dns_verify_pre['missing_fqdn']) != 0:       # List of CSV entires missing from DNS zones  should be 0
+                print("!!! Error - These entries do not exist on DNS server, you must remove from CSV before you can run the script.")
+                pprint(dns_verify_pre['missing_fqdn'])
+                exit()
+
+        # Add or remove DNS entires and verify outcome is as expected compared with DNS state before the change
+        error = 'NO'
+        dns.create_new_csv(type, temp_csv)
+        if type == 'add':
+            print("\nDNS >> Adding the new entries...")
+        elif type == 'remove':
+            print("\nDNS >> Removing the entries...")
+        dns_create = dns.deploy_csv(type, temp_csv, win_dir)
+        for x in dns_create[1]:         # Have to do a list and loop due to bug in remove cmd on windows (see deploy_csv)
+            if x is True:          # Error handling based on output returned from DNS server
+                print("!!! Warning - Was maybe an issue with the config commands sent to the DNS server.")
+        for x in dns_create[2]:
+            if len(x) != 0:         # Needed so only prints warning once
+                error = True
+        if error == True:
+            print("!!! Warning - Was maybe an issue with the reservations/ CSV file sent to the DNS server.")
+            for x in dns_create[2]:
+                if len(x) != 0:             # Error handling based on output returned from DNS server
+                    print("\n".join([str(s) for s in x]))
+
+        # Verification that all records have been added ('add') or removed('remove')
+        dns_dm = dns.get_record()
+        dns_verify_post = dns.verify_csv_vs_dns(dns_dm[0], dns_dm[1])
+        print("\nDNS: Check and confirm the numbers below add up to what you would expect.")
+        print("DNS: Num A/PTR Entries in CSV: {}, Num A/PTR Records Before: {}, Num A/PTR Records After: {}".format(dns_create[0], dns_verify_pre['len_csv'], dns_verify_post['len_csv']))
+        if type == 'add':
+            if len(dns_verify_post['missing_fqdn']) != 0:       # Checking (by name) number of CSV FW entires missing from DNS server is 0
+                print("!!! Warning - The following new DNS records are missing from the DNS server, check the DNS server.")
+                pprint(dns_verify_post['missing_fqdn'])
+                error = 'YES'
+        elif type == 'remove':
+            if len(dns_verify_post['used_fqdn']) != 0:      # Number of used FW entires (by name) on DNS server should equal number be 0
+                print("!!! Error - The following DNS records are still present on the DNS server, check the DNS server.")
+                pprint(dns_verify_post['used_fqdn'])
+                error = 'YES'
+
+        if error == 'NO':
+            print("DNS: Transaction completed successfully")
+        exit()
+
 
     # def task_dhcp_add(self, type):
         # dhcp = Dhcp(dhcp_svr, self.user, self.password, self.csv_dm)
@@ -297,6 +355,7 @@ What type of task is being performed?
     def task_dhcp(self, type):
         dhcp = Dhcp(dhcp_svr, self.user, self.password, self.csv_dhcp_dm)
         # Fails if Scopes or Domains do not exist
+        print("DNS >> Checking the scopes exist on the DHCP server...")
         dhcp_failfast = dhcp.failfast()
         if dhcp_failfast != None:
             print(dhcp_failfast)
@@ -309,21 +368,26 @@ What type of task is being performed?
             if len(dhcp_verify_pre['used_reserv']) != 0:    # List of CSV entries that are currently in DHCP should be 0
                 print("!!! Error - These entries already exist, you must delete the duplicates before can run the script.")
                 pprint(dhcp_verify_pre['used_reserv'])
-                exit()
+                # exit()
         elif type == 'remove':
             if len(dhcp_verify_pre['missing_resv']) != 0:       # List of CSV entires missing from DHCP server should be 0
                 print("!!! Error - These entries do not exist, you must remove from CSV before you can run the script.")
                 pprint(dhcp_verify_pre['missing_resv'])
-                exit()
+                # exit()
 
         # Add or remove DHCP entires and verify outcome is as expected compared with DHCP state before the change
         error = 'NO'
         dhcp.create_new_csv(csv_file, temp_csv)
+        if type == 'add':
+            print("\nDHCP >> Adding the new entries...")
+        elif type == 'remove':
+            print("\nDHCP >> Removing the entries...")
         dhcp_create = dhcp.deploy_csv(type, temp_csv, win_dir)
         if dhcp_create[1] is True:          # Error handling based on output returned from DHCP server
-            "!!! Warning - Was maybe an issue with the config commands sent to the DHCP server."
+            print("!!! Warning - Was maybe an issue with the config commands sent to the DHCP server.")
         if dhcp_create[2] != 0:             # Error handling based on output returned from DHCP server
-            "!!! Warning - Was maybe an issue with the reservations/ CSV file sent to the DHCP server."
+            print("!!! Warning - Was maybe an issue with the reservations/ CSV file sent to the DHCP server.")
+
         # Verification that all reservations have been added ('add') or removed('remove')
         dhcp_dm = dhcp.get_resv()
         dhcp_verify_post = dhcp.verify_csv_vs_dhcp(dhcp_dm)
@@ -335,11 +399,14 @@ What type of task is being performed?
                 pprint(dhcp_verify_post['missing_resv'])
                 error = 'YES'
         elif type == 'remove':
-            if len(dhcp_verify_post['missing_resv']) != dhcp_create[0]:      # Number of missing entires (by IP) on DHCP server should equal number in CSV
-                print("!!! Error - The following DHCP reservations are still used on the DHCP server, check the DHCP server.")
-                pprint(dhcp_verify_post['missing_resv'])
+            # if len(dhcp_verify_post['missing_resv']) != dhcp_create[0]:      # Number of missing entires (by IP) on DHCP server should equal number in CSV
+            #     print("!!! Error - The following DHCP reservations are still present on the DHCP server, check the DHCP server.")
+            #     pprint(dhcp_verify_post['missing_resv'])
+            #     error = 'YES'
+            if len(dhcp_verify_post['used_resv']) != 0:      # Number of used entires (by IP) on DHCP server should be 0
+                print("!!! Error - The following DHCP reservations are still present on the DHCP server, check the DHCP server.")
+                pprint(dhcp_verify_post['used_resv'])
                 error = 'YES'
-
         if error == 'NO':
             print("DHCP server transaction completed successfully")
             exit()
@@ -349,7 +416,6 @@ What type of task is being performed?
 
 # 7. Run the tasks dependant on the user unput.
 
-    # def task_dhcp(self)
 
 
 
@@ -367,18 +433,19 @@ def main():
     # Runs function 3 to validate format of the CSV contents
     validation.verify()
     # Runs function 4 to create reverse lookup DM format from CSV data
-    # validation.dns_rv()
+    validation.dns_rv()
 
-    # # Runs function 5 to create the new combineed  dictionary DMs for DHCP and DNS that are used for pre/post checks
-    # csv_dhcp_dm = validation.make_data_model(csv_dhcp_output)
-    # csv_dns_fw_dm = validation.make_data_model(csv_dns_fw_output)
-    # csv_dns_rv_dm = validation.make_data_model(csv_dns_rv_output)
+    # # Runs function 5 to create the new combined dictionary DMs for DHCP and DNS that are used for pre/post checks
+    csv_dhcp_dm = validation.make_data_model(csv_dhcp_output)
+    csv_dns_fw_dm = validation.make_data_model(csv_dns_fw_output)
+    csv_dns_rv_dm = validation.make_data_model(csv_dns_rv_output)
+    # Runs function 6 and 7 to get logon credentails and load main menu
+    tasks = Main_menu(csv_dhcp_dm, csv_dns_fw_dm, csv_dns_rv_dm)
+    tasks.login()
 
-    # # Runs function 6 and 7 to get logon credentails and load main menu
-    # tasks = Main_menu(csv_dhcp_dm, csv_dns_fw_dm, csv_dns_rv_dm)
-    # tasks.login()
-
-
+    ##### FOR TESTING
+    # tasks.task_dns('add')
+    # tasks.task_dns('remove')
 
 
 if __name__ == '__main__':
@@ -386,10 +453,6 @@ if __name__ == '__main__':
 
 
 
-# To do in pytests
-# read_csv now returning 3 vlaues
-# ead_csv test for TTL fail
-# Add dns_rv_format to pytests
 
 
 
