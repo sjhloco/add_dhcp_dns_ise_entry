@@ -43,6 +43,10 @@
 -Add on-demand pytest to check agaisnt DNS and DHCP servers
 **COMPLETED**
 
+**NOT STARTED**
+Add to initial check to make sure no duplicate entires in the CSV
+Do some real performance testing of adding 50, 100, 200 entries in one go
+
 ### 5a. cisco_ise.py: check against ISE
 **NOT STARTED**
 -Build test ISE lab
