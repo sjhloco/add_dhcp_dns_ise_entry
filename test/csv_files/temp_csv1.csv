@@ -1,0 +1,5 @@
+ZoneName,Name,RRType
+10.10.10.in-addr.arpa,43,PTR
+10.10.10.in-addr.arpa,45,PTR
+20.20.20.in-addr.arpa,44,PTR
+16.172.in-addr.arpa,5.48,PTR

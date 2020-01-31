@@ -22,11 +22,10 @@ class Dhcp():
 ###################################### FAILFAST ######################################
     # Check if scopes exist on DHCP server
     def failfast(self):
-        print("Checking scopes exist on the DHCP server...")
         bad_scopes = []
         for csv_dict in self.csv_dhcp_dm:
             for scope in csv_dict.keys():
-                print(scope)
+                print('-',scope)
                 # Get list of all reservations in the scope
                 with RunspacePool(self.wsman_conn) as pool:
                     ps = PowerShell(pool)
@@ -40,10 +39,10 @@ class Dhcp():
                     bad_scopes.append(scope)
         # If any of the scopes dont not exist values are returned to main.py (which also casues script to exit)
         if len(bad_scopes) != 0:
-            return '!!! Error - These scopes dont exist on the DHCP server: {}'.format(bad_scopes)
+            return '!!! Error - The following scopes dont exist on the DHCP server: \n{}'.format(bad_scopes)
 
 ###################################### Get DHCP reservations ######################################
-    def get_resv(self):
+    def get_entries(self):
         dhcp_dm = []
         # On a per-scope gets all the current DHCP addresses that will then be compared to those in the CSV
         for csv_dict in self.csv_dhcp_dm:
@@ -68,7 +67,7 @@ class Dhcp():
         return dhcp_dm
 
 ###################################### Compare new Vs current resv ######################################
-    def verify_csv_vs_dhcp(self, dhcp_dm):
+    def verify_csv_vs_svr(self, dhcp_dm):
         csv_ip, csv_name, csv_mac, dhcp_ip, dhcp_name, dhcp_mac, dhcp_ip_name_mac = ([] for i in range(7))
         #Create a list of IPs, domain names and MACs from each DM (CSV and from dhcp_srv)
         for dict_scope in self.csv_dhcp_dm:
@@ -113,11 +112,11 @@ class Dhcp():
         missing_resv = set(csv_ip) - set(dhcp_ip)
 
         # What is returned to main.py to kill script if any duplicates. len(csv_name) is used to compare pre and post number of entries
-        output = {'len_csv': len(dhcp_ip_name_mac), 'used_reserv': list(used_reserv), 'missing_resv': missing_resv}
+        output = {'len_csv': len(dhcp_ip_name_mac), 'used_entries': sorted(list(used_reserv)), 'missing_entries': sorted(list(missing_resv))}
         return output
 
 ###################################### Creates new CSV with no scope prefix  ######################################
-    def create_new_csv(self,csv_file, temp_csv):
+    def create_new_csv(self, type, csv_file, temp_csv):
         # # Creates a new list from the CSV with prefix removed from the scope
         new_csv = []
         with open(csv_file, 'r') as x:
@@ -160,7 +159,7 @@ class Dhcp():
             elif type == 'remove':
                 ps.add_cmdlet("Import-Csv").add_argument("{}".format(win_dir)).add_cmdlet("Remove-DhcpServerv4Reservation")
             ps.invoke()
-        output = [self.num_new_entries, ps.had_errors, ps.streams.error]
+        output = [self.num_new_entries, [ps.had_errors], [ps.streams.error]]
 
         # Cleanup temp files
         os.remove(temp_csv)
@@ -170,28 +169,3 @@ class Dhcp():
             print("!!! Warning - Could not delete temporary file {} off DHCP server, you will have to do manually.\n{}".format(win_dir, e))
 
         return output
-
-
-######################################################### TESTING #########################################################
-
-# dhcp_svr = "10.30.10.81"
-# user = "ste"
-# password = "pa55w0rd!"
-# csv_dhcp_dm = [{'10.10.10.0': [('10.10.10.1', 'computer1.stesworld.com', '1a-1b-1c-1d-1e-1f'), ('10.10.10.3', 'computer3.stesworld.com', '3a-3b-3c-3d-3e-3f'), ('10.10.10.5', 'computer5.stesworld.com', '5a-5b-5c-5d-5e-5f')]},
-#           {'20.20.20.0': [('20.20.20.2', 'computer2.stesworld.com', '2a-2b-2c-2d-2e-2f'), ('20.20.20.4', 'computer4.stesworld.com', '4a-4b-4c-4d-4e-4f'), ('20.20.20.8', 'computer8.stesworld.com', '8a-8b-8c-8d-8e-8f')]},
-#           {'30.30.30.0': [('30.30.30.6', 'computer6.stesworld.com', '6a-6b-6c-6d-6e-6f'), ('30.30.30.7', 'computer7.stesworld.com', '7a-7b-7c-7d-7e-7f')]}]
-# dhcp_dm = [{'10.10.10.0': [('10.10.10.5', 'computer5.steswor', '5a-5b-5c-5d-5e-5f'), ('10.10.10.10', 'computer10.steswo', '1f-1f-1f-1f-1f-1f')]},
-#            {'20.20.20.0': [('20.20.20.4', 'computer4.steswor', '4a-4b-4c-4d-4e-4f'), ('20.20.20.10', 'computer20.steswo', '1e-1e-1e-1e-1e-1e')]},
-#            {'30.30.30.0': [('30.30.30.6', 'computer6.steswor', '6a-6b-6c-6d-6e-6f'), ('30.30.30.10', 'computer30.steswo', '1d-1d-1d-1d-1d-1d')]}]
-# csv_file = "/Users/mucholoco/test_dns.csv"
-# type = "add"
-# temp_csv = "/Users/mucholoco/temp_csv.csv"
-# win_dir = os.path.join('C:\\temp', os.path.split(temp_csv)[1])
-
-# dhcp = Dhcp(dhcp_svr, user, password, csv_dhcp_dm)
-# dhcp.verify_csv_vs_dhcp(dhcp_dm)
-# a = dhcp.create_new_csv(csv_file, temp_csv)
-# a = dhcp.failfast()
-# a = dhcp.get_resv()
-# pprint(a)
-

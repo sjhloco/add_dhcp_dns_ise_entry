@@ -1,0 +1,5 @@
+ScopeId,IPAddress,Name,ClientId,Description,ttl
+10.255.255.0/24,10.255.255.11,computer11.example.com,1a-1f-1f-1f-1f-1f,Reserved for Computer11,
+10.255.255.0/24,10.255.255.12,computer12.example.com,1b-1f-1f-1f-1f-1f,Reserved for Computer12,00:20:00
+10.255.254.0/24,10.255.254.30,computer30.example.co.uk,1c-1f-1f-1f-1f-1f,computer30.example.co.uk,
+10.255.254.0/24,10.255.254.31,computer31.example.co.uk,1d-1f-1f-1f-1f-1f,computer31.example.co.uk,01:00:00

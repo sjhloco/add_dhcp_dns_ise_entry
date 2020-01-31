@@ -39,29 +39,22 @@
 
 ### 4. main.py: Main menu
 -Add dns to main menu option
+-Refactor it so not DRY, one maine engine for all tests
+-Add on-demand pytest to check agaisnt DNS and DHCP servers
 **COMPLETED**
 
-**NOT STARTED**
--Need to refactor it so have all the different options but not too complicated and DRY!!!!!
-
-### 3a. cisco_ise.py: check against ISE
-
+### 5a. cisco_ise.py: check against ISE
 **NOT STARTED**
 -Build test ISE lab
--Add failfast function, need ot decide what???
--Add pre-checks/ post-checks to verify if what???
+-Add failfast function, need to decide what fails???
+-Add pre-checks/ post-checks to verify, again need ot decide what. guess MAC or name exists.
 -Create pytests
 
-
-### 3b. win_dns.py: Add or remove the new entries to ISE
-
+### 5b. win_dns.py: Add or remove the new entries to ISE
 **NOT STARTED**
 -Add/remove endhost entries in ISE
--Create pytests
+-Create ondemand on-demand pytest
 
-
-
-TODO
-add to notes on pysrp
-write up the DNS menu in main
-Move menus to own scripts and write pytest (if can)
+### 5c. win_dns.py: Add or remove the new entries to ISE
+**NOT STARTED**
+-Add to main menu

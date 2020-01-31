@@ -9,12 +9,12 @@ from os.path import expanduser
 import csv
 
 class Dns():
-    def __init__(self, dns_svr, user, password, csv_dns_fw_dm, csv_dns_rv_dm):
+    def __init__(self, dns_svr, user, password, csv_dns_dm):
         self.dns_svr = dns_svr
         self.user = user
         self.password = password
-        self.csv_dns_fw_dm = csv_dns_fw_dm
-        self.csv_dns_rv_dm = csv_dns_rv_dm
+        self.csv_dns_fw_dm = csv_dns_dm[0]
+        self.csv_dns_rv_dm = csv_dns_dm[1]
 
         # WSman connection used to run powershell cmds on windows servers
         self.wsman_conn = WSMan(self.dns_svr, username=self.user, password=self.password, ssl=False)
@@ -35,7 +35,7 @@ class Dns():
     # Interate through all zones and see if exist on DNS server
         for zone in all_zones:
             with RunspacePool(self.wsman_conn) as pool:
-                print(zone)
+                print('-', zone)
                 ps = PowerShell(pool)
                 # The powershell cmd is "Get-DhcpServerv4Reservation -scopeid 192.168.200.0"
                 ps.add_cmdlet("Invoke-Expression").add_parameter("Command", "Get-DnsServerZone {}".format(zone))
@@ -47,10 +47,10 @@ class Dns():
                 bad_zones.append(zone)
         # If any of the scopes dont not exist values are returned to main.py (which also casues script to exit)
         if len(bad_zones) != 0:
-            return '!!! Error - These zones dont exist on the DNS server: {}'.format(bad_zones)
+            return '!!! Error - The following zones dont exist on the DNS server: \n{}'.format(bad_zones)
 
 ###################################### Get DNS reservations ######################################
-    def get_record(self):
+    def get_entries(self):
         dns_fw_dm, dns_rv_dm = ([] for i in range(2))
 
         # On a per-zone basis gets all the current DNS entries that will then be compared to those in the CSV
@@ -97,7 +97,10 @@ class Dns():
         return [dns_fw_dm, dns_rv_dm]
 
 ###################################### Compare new Vs current resv ######################################
-    def verify_csv_vs_dns(self, dns_fw_dm, dns_rv_dm):
+    def verify_csv_vs_svr(self, dns_dm):
+        dns_fw_dm = dns_dm[0]
+        dns_rv_dm = dns_dm[1]
+
         csv_name, csv_rv_name, dns_fw_name, dns_rv_name, used_fw_fqdn, used_rv_fqdn = ([] for i in range(6))
         # Create a list tuples of all FQDNs from CSV DMs (zone, fqdn)
         for dict_domain in self.csv_dns_fw_dm:
@@ -133,11 +136,11 @@ class Dns():
 
         # What is returned to main.py to kill script if any duplicates. len(csv_name) is used to compare pre and post number of entries
         len_csv = str(len(dns_fw_name)) + '/' + str(len(dns_rv_name))       # Number of added records in the format A/PTR
-        output = {'len_csv': len_csv, 'used_fqdn': used_fqdn, 'missing_fqdn': missing_fqdn}
+        output = {'len_csv': len_csv, 'used_entries': used_fqdn, 'missing_entries': missing_fqdn}
         return output
 
 ###################################### Creates new CSV with no scope prefix  ######################################
-    def create_new_csv(self, type, temp_csv):
+    def create_new_csv(self, type, csv_file, temp_csv):
         self.num_new_entries = 0
         # Creates a temp csv file with header and format compatible with DNS server import.
         if type == 'add':
@@ -233,36 +236,4 @@ class Dns():
             print("!!! Warning - Could not delete temporary files off DNS server, you will have to do manually.\n{}".format(e))
 
         return output
-
-######################################################### TESTING #########################################################
-
-# dns_svr = "10.30.10.81"
-# user = "ste"
-# password = "pa55w0rd!"
-# csv_dns_fw_dm = [{'stesworld.com': [('10.10.10.43', 'computer43', '01:00:00'),
-#                                 ('20.20.20.44', 'computer44', '01:00:00'),
-#                                 ('10.10.10.45', 'computer45', '01:00:00')]},
-#                 {'stesworld.co.uk': [('172.16.48.5', 'computer46', '01:00:00')]}]
-
-
-# csv_dns_rv_dm = [{'10.10.10.in-addr.arpa': [('43', 'computer43.stesworld.com.'),
-#                                         ('45', 'computer45.stesworld.com.')]},
-#              {'20.20.20.in-addr.arpa': [('44', 'computer44.stesworld.com.')]},
-#              {'16.172.in-addr.arpa': [('5.48', 'computer46.stesworld.co.uk.')]}]
-# csv_file = "/Users/mucholoco/test_dns.csv"
-# type = "add"
-# temp_csv = "/Users/mucholoco/temp_csv.csv"
-# win_dir = os.path.join('C:\\temp', os.path.split(temp_csv)[1])
-# temp_csv1 = "/Users/mucholoco/temp_csv1.csv"
-# win_dir1 = os.path.join('C:\\temp', os.path.split(temp_csv1)[1])
-# type = 'add'
-# # type = 'remove'
-
-# dns = Dns(dns_svr, user, password, csv_dns_fw_dm, csv_dns_rv_dm)
-# dns.failfast()
-# dns_dm = dns.get_record()
-# a = dns.verify_csv_vs_dns(dns_dm[0], dns_dm[1])
-# pprint(a)
-# dns.create_new_csv(type, temp_csv,temp_csv1)
-# dns.deploy_csv(type, temp_csv, win_dir, temp_csv1, win_dir1)
 
