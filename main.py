@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 # run using python main.py ~/test2.csv
 
 from sys import argv
@@ -201,10 +200,10 @@ class Validate():
 ################# Get login details and main menu from which tasks are run #################
 
 class Main_menu():
-    def __init__(self, csv_dhcp_dm, csv_dns_fw_dm, csv_dns_rv_dm):
+    def __init__(self, csv_dhcp_dm, csv_dns_dm):
         self.csv_dhcp_dm = csv_dhcp_dm
-        self.csv_dns_fw_dm = csv_dns_fw_dm
-        self.csv_dns_rv_dm = csv_dns_rv_dm
+        self.csv_dns_dm = csv_dns_dm
+
     # 6. Collects login detais and tests that they are correct Assumed if works on one device will work on all
     def login(self):
         self.complete = False                        # Used to keep loop going if entered credentials are wrong
@@ -215,210 +214,140 @@ class Main_menu():
                 # Test credentials by running simple cmd on the DHCP server
                 conn = Client(dhcp_svr, username=self.user, password=self.password,ssl=False)
                 conn.execute_cmd('ipconfig')
-                self.task()       # Runs next function (6)
+                self.menu()       # Runs next function (6)
 
             except Exception as e:              # If login fails loops to begining displaying this error message
                 print(e)
 
     # 7. Main menu. The options user can select which will run the required tasks in other (imported) scripts
-    def task(self):
+    def menu(self):
         self.complete = True                 # Kills the loop for login
         print('''
 What type of task is being performed?
-1. Add DHCP Entry
-2. Delete DHCP entry
-3. Add DNS Entry
+1. Add DNS Entry
+2. Add DHCP Entry
+3. Add DNS and DHCP Entry
 4. Delete DNS entry
-5. Add DHCP & DNS Entry
+5. Delete DHCP Entry
 6. Delete DHCP & DNS entry
 ''')
-        task = input("Enter a number: ")
-        print()
+        menu_opt = input("Enter a number: ")
         while True:
-            if task == '1':
-                type = 'add'
-                self.task_dhcp(type)
-            elif task == '2':
-                type = 'remove'
-                self.task_dhcp(type)
-            elif task == '3':
-                type = 'add'
-                self.task_dns(type)
-            elif task == '4':
-                type = 'remove'
-                self.task_dns(type)
+            if menu_opt == '1':
+                dns_verify_pre = self.task_verify('add', 'DNS')
+                self.task_config(dns_verify_pre, 'add', 'DNS')
+                break
+            elif menu_opt == '2':
+                dhcp_verify_pre = self.task_verify('add', 'DHCP')
+                self.task_config(dhcp_verify_pre, 'add', 'DHCP')
+                break
+            elif menu_opt == '3':
+                dns_verify_pre = self.task_verify('add', 'DNS')
+                dhcp_verify_pre = self.task_verify('add', 'DHCP')
+                self.task_config(dns_verify_pre, 'add', 'DNS')
+                self.task_config(dhcp_verify_pre, 'add', 'DHCP')
+                break
+            elif menu_opt == '4':
+                dns_verify_pre = self.task_verify('remove', 'DNS')
+                self.task_config(dns_verify_pre, 'remove', 'DNS')
+                break
+            elif menu_opt == '5':
+                dhcp_verify_pre = self.task_verify('remove', 'DHCP')
+                self.task_config(dhcp_verify_pre, 'remove', 'DHCP')
+                break
+            elif menu_opt == '6':
+                dns_verify_pre = self.task_verify('remove', 'DNS')
+                dhcp_verify_pre = self.task_verify('remove', 'DHCP')
+                self.task_config(dns_verify_pre, 'remove', 'DNS')
+                self.task_config(dhcp_verify_pre, 'remove', 'DHCP')
+                break
             else:
-                task = input("Not recognised, enter a valid number: ")
+                menu_opt = input("Not recognised, enter a valid number: ")
 
+################# TASKS - runs the external modules #################
+# Same framework is used to run any of the external modules with the name in the menu_opt used to decide which
+# Split into verify and config as want to verify all modules so no configuration doen unless all modules tests pass
 
-################# TASKS - runs external modules #################
-    def task_dns(self, type):
-        # dns = Dns(dns_svr, 'ste', 'pa55w0rd!', self.csv_dns_fw_dm, self.csv_dns_rv_dm)        # For testing
-        dns = Dns(dns_svr, self.user, self.password, self.csv_dns_fw_dm, self.csv_dns_rv_dm)
-        # Fails if forward or reverse zones do not exist
-        print("DNS >> Checking the zones exist on the DNS server...")
-        dns_failfast = dns.failfast()
-        if dns_failfast != None:
-            print(dns_failfast)
+    def task_verify(self, task_type, service):
+        # Instantizes a module class dependant on the argment passed in from the main menu
+        if service == 'DHCP':
+            task = Dhcp(dhcp_svr, self.user, self.password, self.csv_dhcp_dm)
+        elif service == 'DNS':
+            task = Dns(dns_svr, self.user, self.password, self.csv_dns_dm)
+
+        # Fails if DHCP scopes, forward zones or reverse zones do not exist
+        print("\n{0} >> Checking the scopes or zones exist on the {0} server...".format(service))
+        failfast = task.failfast()
+        if failfast != None:
+            print(failfast)
             exit()
-
-        # Fails if any of the FQDNs exist ('add') or dont already exist ('remove')
-        dns_dm = dns.get_record()
-        dns_verify_pre = dns.verify_csv_vs_dns(dns_dm[0], dns_dm[1])
-        if type == 'add':
-            if len(dns_verify_pre['used_fqdn']) != 0:    # List of CSV entries that are currently in DNS zones should be 0
-                print("!!! Error - These entries already exist on DNS server, you must delete the duplicates before can run the script.")
-                pprint(dns_verify_pre['used_fqdn'])
+        # Fails if any of the DHCP reservations or FQDNs exist ('add') or dont already exist ('remove') on DHCP or DNS servers
+        print("{0} >> Gathering existing entries from the {0} server...".format(service))
+        server_dm = task.get_entries()
+        print("{} >> Checking CSV entries against server entries for duplicates...".format(service))
+        verify_pre = task.verify_csv_vs_svr(server_dm)
+        if task_type == 'add':
+            if len(verify_pre['used_entries']) != 0:    # List of CSV entries that are already in scope or zones on server, should be 0
+                print("!!! Error - These entries already exist on {} server, you must delete the duplicates before can run the script.".format(service))
+                pprint(verify_pre['used_entries'])
                 exit()
-        elif type == 'remove':
-            if len(dns_verify_pre['missing_fqdn']) != 0:       # List of CSV entires missing from DNS zones  should be 0
-                print("!!! Error - These entries do not exist on DNS server, you must remove from CSV before you can run the script.")
-                pprint(dns_verify_pre['missing_fqdn'])
+        elif task_type == 'remove':
+            if len(verify_pre['missing_entries']) != 0:       # List of CSV entries that are missing from scope or zones on server, should be 0
+                print("!!! Error - These entries do not exist on {} server, you must remove from CSV before you can run the script.".format(service))
+                pprint(verify_pre['missing_entries'])
                 exit()
 
-        # Add or remove DNS entires and verify outcome is as expected compared with DNS state before the change
+        return verify_pre
+
+    def task_config(self, verify_pre, task_type, service):
+        # Instantizes a module class dependant on the argment passed in from the main menu
+        if service == 'DHCP':
+            task = Dhcp(dhcp_svr, self.user, self.password, self.csv_dhcp_dm)
+        elif service == 'DNS':
+            task = Dns(dns_svr, self.user, self.password, self.csv_dns_dm)
+
+        # Add or remove DHCP or DNS entires
         error = 'NO'
-        dns.create_new_csv(type, temp_csv)
-        if type == 'add':
-            print("\nDNS >> Adding the new entries...")
-        elif type == 'remove':
-            print("\nDNS >> Removing the entries...")
-        dns_create = dns.deploy_csv(type, temp_csv, win_dir)
-        for x in dns_create[1]:         # Have to do a list and loop due to bug in remove cmd on windows (see deploy_csv)
-            if x is True:          # Error handling based on output returned from DNS server
-                print("!!! Warning - Was maybe an issue with the config commands sent to the DNS server.")
-        for x in dns_create[2]:
-            if len(x) != 0:         # Needed so only prints warning once
+        task.create_new_csv(task_type, csv_file, temp_csv)
+        if task_type == 'add':
+            print("\n{} >> Adding the new entries...".format(service))
+        elif task_type == 'remove':
+            print("\n{} >> Removing the entries...".format(service))
+        create = task.deploy_csv(task_type, temp_csv, win_dir)
+        # Handling of errors returned in output (either error of cmd or error of what cmd tried to do)
+        for cmd_err in create[1]:
+            if cmd_err is True:
+                print("!!! Warning - Possible issues with the configuration commands sent to {} server, investigate the below errors.".format(service))
+        for str_err in create[2]:
+            if len(str_err) != 0:         # Need this first loop so if more than 1 error the initial warning is only printed once
                 error = True
         if error == True:
-            print("!!! Warning - Was maybe an issue with the reservations/ CSV file sent to the DNS server.")
-            for x in dns_create[2]:
-                if len(x) != 0:             # Error handling based on output returned from DNS server
-                    print("\n".join([str(s) for s in x]))
+            print("!!! Warning - Possible issues with entries added/removed on {} server, investigate the below errors.".format(service))
+            for str_err in create[2]:
+                if len(str_err) != 0:
+                    print("\n".join([str(err) for err in str_err]))
 
-        # Verification that all records have been added ('add') or removed('remove')
-        dns_dm = dns.get_record()
-        dns_verify_post = dns.verify_csv_vs_dns(dns_dm[0], dns_dm[1])
-        print("\nDNS: Check and confirm the numbers below add up to what you would expect.")
-        print("DNS: Num A/PTR Entries in CSV: {}, Num A/PTR Records Before: {}, Num A/PTR Records After: {}".format(dns_create[0], dns_verify_pre['len_csv'], dns_verify_post['len_csv']))
-        if type == 'add':
-            if len(dns_verify_post['missing_fqdn']) != 0:       # Checking (by name) number of CSV FW entires missing from DNS server is 0
-                print("!!! Warning - The following new DNS records are missing from the DNS server, check the DNS server.")
-                pprint(dns_verify_post['missing_fqdn'])
+        # Verification that all records have been added (task_type = add) or removed (task_type = remove)
+        server_dm = task.get_entries()
+        verify_post = task.verify_csv_vs_svr(server_dm)
+        print("Check and confirm the numbers below add up to what you would expect.")
+        if service == 'DNS':
+            print("Num A/PTR Entries in CSV: {}, Num Records Before: {}, Num Records After: {}".format(create[0], verify_pre['len_csv'], verify_post['len_csv']))
+        elif service == 'DHCP':
+            print("Num Entries in CSV: {}, Num Reservations Before: {}, Num Reservations After: {}".format(create[0], verify_pre['len_csv'], verify_post['len_csv']))
+        if task_type == 'add':
+            if len(verify_post['missing_entries']) != 0:       # The number of CSV entries not on the DHCP/DNS server should be 0, if not lists missing entries
+                print("!!! Warning - The following entries should have been added but are not on the {} server, manually check these on the server.".format(service))
+                pprint(verify_post['missing_entries'])
                 error = 'YES'
-        elif type == 'remove':
-            if len(dns_verify_post['used_fqdn']) != 0:      # Number of used FW entires (by name) on DNS server should equal number be 0
-                print("!!! Error - The following DNS records are still present on the DNS server, check the DNS server.")
-                pprint(dns_verify_post['used_fqdn'])
+        elif task_type == 'remove':
+            if len(verify_post['used_entries']) != 0:      #  Should be 0 CSV entries on the DHCP/DNS server, if not lists missing entries
+                print("!!! Warning - The following entries should have been deleted but are still on the {} server, manually check these on the server.".format(service))
+                pprint(verify_post['used_entries'])
                 error = 'YES'
 
         if error == 'NO':
-            print("DNS: Transaction completed successfully")
-        exit()
-
-
-    # def task_dhcp_add(self, type):
-        # dhcp = Dhcp(dhcp_svr, self.user, self.password, self.csv_dm)
-    #     # dns = Dns(dns_svr, user, password, self.csv_dm)
-    #     # Fails if Scopes or Domains do not exist
-    #     dhcp_failfast = dhcp.failfast()
-    #     dns_failfast = None     # change to when DNS is done dns.failfast()
-    #     if dhcp_failfast != None or dns_failfast != None:
-    #         print(dhcp_failfast, '\n', dns_failfast)
-    #         exit()
-    #     # Fails if any of the new reservations or DNS entries already exist
-    #     dhcp_verify_pre = dhcp.verify()
-    #     dns_verify_pre = {'DNS': []}     # change to when DNS is done dns.verify()
-    #     if len(dhcp_verify_pre[1]['DHCP']) != 0 or len(dns_verify_pre['DNS']) != 0:
-    #         print("!!! Error - These entries already exist, you must delete the duplicates before can run the script.")
-    #         pprint(dhcp_verify_pre[1])
-    #         pprint(dns_verify_pre)
-    #         exit()
-    #     # Create DHCP entries and verify
-    #     dhcp_create = dhcp.create(csv_file, type, temp_csv, win_dir)
-    #     # Error handling based on the DHCP cmds run
-    #     if dhcp_create[1] is True:
-    #         "!!! Warning - Was maybe an issue with the config commands sent to the DHCP server."
-    #     if dhcp_create[2] != 0:
-    #         "!!! Error - Was maybe an issue with the reservations/ CSV file sent to the DHCP server."
-    #     # Verification and error handling based current entries on DHCP server
-    #     dhcp_verify_post = dhcp.verify()
-    #     print("Check and confirm the numbers below add up.")
-    #     print("Num Entries in CSV: {}, Num Reservations Before: {}, Num Reservations After: {}".format(dhcp_create[0], dhcp_verify_pre[0], dhcp_verify_post[0]))
-    #     if len(dhcp_verify_post[2]) != 0:
-    #         print("!!! Error - the following new DHCP reservations are missing on the DHCP server")
-    #         pprint(dhcp_verify_post[2])
-    #     else:
-    #         print("The script has verified all IP addresses in the CSV are now DHCP reservations.")
-    #     exit()
-
-    def task_dhcp(self, type):
-        dhcp = Dhcp(dhcp_svr, self.user, self.password, self.csv_dhcp_dm)
-        # Fails if Scopes or Domains do not exist
-        print("DNS >> Checking the scopes exist on the DHCP server...")
-        dhcp_failfast = dhcp.failfast()
-        if dhcp_failfast != None:
-            print(dhcp_failfast)
-            exit()
-
-        # Fails if any of the reservations exist ('add') or dont already exist ('remove')
-        dhcp_dm = dhcp.get_resv()
-        dhcp_verify_pre = dhcp.verify_csv_vs_dhcp(dhcp_dm)
-        if type == 'add':
-            if len(dhcp_verify_pre['used_reserv']) != 0:    # List of CSV entries that are currently in DHCP should be 0
-                print("!!! Error - These entries already exist, you must delete the duplicates before can run the script.")
-                pprint(dhcp_verify_pre['used_reserv'])
-                # exit()
-        elif type == 'remove':
-            if len(dhcp_verify_pre['missing_resv']) != 0:       # List of CSV entires missing from DHCP server should be 0
-                print("!!! Error - These entries do not exist, you must remove from CSV before you can run the script.")
-                pprint(dhcp_verify_pre['missing_resv'])
-                # exit()
-
-        # Add or remove DHCP entires and verify outcome is as expected compared with DHCP state before the change
-        error = 'NO'
-        dhcp.create_new_csv(csv_file, temp_csv)
-        if type == 'add':
-            print("\nDHCP >> Adding the new entries...")
-        elif type == 'remove':
-            print("\nDHCP >> Removing the entries...")
-        dhcp_create = dhcp.deploy_csv(type, temp_csv, win_dir)
-        if dhcp_create[1] is True:          # Error handling based on output returned from DHCP server
-            print("!!! Warning - Was maybe an issue with the config commands sent to the DHCP server.")
-        if dhcp_create[2] != 0:             # Error handling based on output returned from DHCP server
-            print("!!! Warning - Was maybe an issue with the reservations/ CSV file sent to the DHCP server.")
-
-        # Verification that all reservations have been added ('add') or removed('remove')
-        dhcp_dm = dhcp.get_resv()
-        dhcp_verify_post = dhcp.verify_csv_vs_dhcp(dhcp_dm)
-        print("DHCP: Check and confirm the numbers below add up to what you would expect.")
-        print("DHCP: Num Entries in CSV: {}, Num Reservations Before: {}, Num Reservations After: {}".format(dhcp_create[0], dhcp_verify_pre['len_csv'], dhcp_verify_post['len_csv']))
-        if type == 'add':
-            if len(dhcp_verify_post['missing_resv']) != 0:       # Checking (by IP) number CSV entires missing from DHCP server is 0
-                print("!!! Warning - The following new DHCP reservations are missing from the DHCP server, check the DHCP server.")
-                pprint(dhcp_verify_post['missing_resv'])
-                error = 'YES'
-        elif type == 'remove':
-            # if len(dhcp_verify_post['missing_resv']) != dhcp_create[0]:      # Number of missing entires (by IP) on DHCP server should equal number in CSV
-            #     print("!!! Error - The following DHCP reservations are still present on the DHCP server, check the DHCP server.")
-            #     pprint(dhcp_verify_post['missing_resv'])
-            #     error = 'YES'
-            if len(dhcp_verify_post['used_resv']) != 0:      # Number of used entires (by IP) on DHCP server should be 0
-                print("!!! Error - The following DHCP reservations are still present on the DHCP server, check the DHCP server.")
-                pprint(dhcp_verify_post['used_resv'])
-                error = 'YES'
-        if error == 'NO':
-            print("DHCP server transaction completed successfully")
-            exit()
-
-
-
-
-# 7. Run the tasks dependant on the user unput.
-
-
-
-
+            print("{} transactions completed successfully. If there was any 'Warning' messages these should be investigated.".format(service))
 
 ###################################### Run the scripts ######################################
 # 1. Starts the script taking input of CSV file name
@@ -437,23 +366,13 @@ def main():
 
     # # Runs function 5 to create the new combined dictionary DMs for DHCP and DNS that are used for pre/post checks
     csv_dhcp_dm = validation.make_data_model(csv_dhcp_output)
-    csv_dns_fw_dm = validation.make_data_model(csv_dns_fw_output)
-    csv_dns_rv_dm = validation.make_data_model(csv_dns_rv_output)
+    csv_dns_dm = [validation.make_data_model(csv_dns_fw_output), validation.make_data_model(csv_dns_rv_output)]
+
     # Runs function 6 and 7 to get logon credentails and load main menu
-    tasks = Main_menu(csv_dhcp_dm, csv_dns_fw_dm, csv_dns_rv_dm)
+    tasks = Main_menu(csv_dhcp_dm, csv_dns_dm)
     tasks.login()
-
-    ##### FOR TESTING
-    # tasks.task_dns('add')
-    # tasks.task_dns('remove')
-
 
 if __name__ == '__main__':
     main()
-
-
-
-
-
 
 
