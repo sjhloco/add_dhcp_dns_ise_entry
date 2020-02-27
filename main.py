@@ -17,15 +17,15 @@ from win_dhcp import Dhcp
 from win_dns import Dns
 
 ##################################  CSV format ##################################
-# ScopeId,IPAddress,Name,ClientId,Description
-# 10.10.10.0,10.10.10.10,Computer1.stesworld.com,1a-1b-1c-1d-1e-1f,Reserved for Computer1
-# 20.20.20.0,20.20.20.11,Computer2.stesworld.com,2a-2b-2c-2d-2e-2f,Reserved for Computer2
+# ScopeId,IPAddress,Name,ClientId,Description,ttl
+# 10.10.10.0/24,10.10.10.10,Computer1.stesworld.com,1a-1b-1c-1d-1e-1f,Reserved for Computer1,00:00:22
+# 20.20.20.0/24,20.20.20.11,Computer2.stesworld.com,2a-2b-2c-2d-2e-2f,Reserved for Computer2,
 
 ######################## Variables to change dependant on environment ########################
 # Where script will look for the csv, by default is the users home directory
 directory = expanduser("~")
 # list of domain_names expected for DHCP and DNS entries (must be upto last.)
-domain_name = ["stesworld.com", "stesworld.co.uk"]
+domain_name = ["stesworld.com", "stesworld.co.uk", "example.co.uk", "example.com"]
 default_ttl = '01:00:00'      # hh:mm:ss, default is 1 hour
 
 # Servers that the script will run against
@@ -54,6 +54,9 @@ class Validate():
             for row in csv_read:
                 if len(row) == 0 or all(0 == len(s) for s in row):      #If it is a blank line skips or all blank columns
                     continue
+                elif '/' not in row[0]:
+                    print("!!!ERROR - The CSV is in invalid, you must have /prefix in the scope column")
+                    exit()
                 elif len(row) != 6:                     # If there are not 6 columns in every row script fails
                     print("!!!ERROR - The CSV is in invalid, check every row has 6 columns and rerun")
                     exit()
@@ -80,7 +83,7 @@ class Validate():
 
 # 3. Make sure that the details in the CSV are in a valid correct format, if not ends the script fails
     def verify(self):
-        scope_error, ip_error, mac_error, ip_in_net_error, all_domains, dom_error, ttl_error = ([] for i in range(7))    # Lists to store invalid elements
+        scope_error, ip_error, mac_error, ip_in_net_error, all_domains, dom_error, ttl_error, ip_dupl, mac_dupl = ([] for i in range(9))    # Lists to store invalid elements
 
         # Validates the CSV contents are valid, creating lists of non-valid elements
         for x in csv_dhcp_output:
@@ -113,13 +116,18 @@ class Validate():
                 for y in dom_error1:
                     if y in list(x.values())[0][1]:
                         dom_error.append(x)
-
         # Checks if TTL is in a valid format (hh:mm:ss) with valid characters (max of 23:59:59)
         for x in csv_dns_fw_output:
             try:
                 assert re.match(r'^[0-2][0-3]:[0-5][0-9]:[0-5][0-9]', list(x.values())[0][2])
             except:
                 ttl_error.append(x)
+        # Checks that there are no duplicate MAC or IP addresses
+        for x in csv_dhcp_output:
+            ip_dupl.append(list(x.values())[0][0])
+            mac_dupl.append(list(x.values())[0][2])
+        ip_dupl = set([x for x in ip_dupl if ip_dupl.count(x) > 1])
+        mac_dupl = set([x for x in mac_dupl if mac_dupl.count(x) > 1])
 
         # Exits script listing issues if any of the above conditions cause an error (list not empty)
         if len(scope_error) != 0:
@@ -146,8 +154,15 @@ class Validate():
             print("!!!ERROR - The TTL is not in a valid format, must be hh:mm:ss upto a maximum of 23:59:59 !!!")
             for x in ttl_error:
                 print(x)
-
-        if len(scope_error) != 0 or len(ip_error) != 0 or len(dom_error) != 0 or len(mac_error) != 0 or len(ip_in_net_error) !=0:
+        if len(ip_dupl) != 0:
+            print("!!!ERROR - The following IP addresses have duplicate entries in the CSV !!!")
+            for x in ip_dupl:
+                print(x)
+        if len(mac_dupl) != 0:
+            print("!!!ERROR - The following MAC addresses have duplicate entries in the CSV !!!")
+            for x in mac_dupl:
+                print(x)
+        if len(scope_error) != 0 or len(ip_error) != 0 or len(dom_error) != 0 or len(mac_error) != 0 or len(ip_in_net_error) !=0 or len(ttl_error) !=0 or len(ip_dupl) !=0 or len(mac_dupl) !=0:
             exit()
 
 ################# Creates the data model for DNS reverse lookup zone #################

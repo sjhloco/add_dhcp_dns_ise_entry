@@ -1,2 +1,4 @@
 ScopeId,IPAddress,Name,ClientId,Description,ttl
 10.10.10.0/24,10.10.20.1,Computer7.stesworld.org,1a-1Z-1c-1f-1e-1f,Reserved for Computer1,24:61:71
+10.10.10.0/24,10.10.10.10,Computer7.stesworld.com,1a-1b-1c-1f-1e-1f,Reserved for Computer1,
+10.10.10.0/24,10.10.10.10,Computer7.stesworld.com,1a-1b-1c-1f-1e-1f,Reserved for Computer1,

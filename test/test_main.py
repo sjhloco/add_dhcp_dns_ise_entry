@@ -46,7 +46,7 @@ def test_verify_scope_ip(capsys):
                                        '!!!ERROR - Invalid IP addresses entered !!!\n' "'10.999.20.1' does not appear to be an IPv4 or IPv6 address\n"
                                        ), 'Error detecting badly formated IP address or scope network address'
 
-# Tests badly formated domain name, MAC address or an IP not to be within the scope cause script to raise an error
+# Tests badly formated domain name, MAC address, an IP not to be within the scope or duplicate MAC or IP addresses cause script to raise an error
 def test_verify_dom_mac_ipin(capsys):
     test = Validate(test_other_fname)
     test.read_csv()
@@ -56,9 +56,12 @@ def test_verify_dom_mac_ipin(capsys):
         pass
     assert capsys.readouterr().out == ('!!!ERROR - Invalid Domain names entered !!!\n' "{'10.10.10.0/24': ('10.10.20.1', 'computer7.stesworld.org', " "'1a-1z-1c-1f-1e-1f')}\n"
                                        '!!!ERROR - Invalid MAC addresses entered !!!\n' "{'10.10.10.0/24': ('10.10.20.1', 'computer7.stesworld.org', " "'1a-1z-1c-1f-1e-1f')}\n"
-                                       '!!!ERROR - IP address not a valid IP address in DHCP scope !!!\n' '10.10.20.1 not in 10.10.10.0/24\n'
-                                       '!!!ERROR - The TTL is not in a valid format, must be hh:mm:ss upto a maximum ' 'of 23:59:59 !!!\n'
-                                       "{'stesworld.org': ('10.10.20.1', 'computer7', '24:61:71')}\n"), 'Error detecting badly formated MAC address, TTL domain name or IP not in scope'
+                                        '!!!ERROR - IP address not a valid IP address in DHCP scope !!!\n' '10.10.20.1 not in 10.10.10.0/24\n'
+                                        '!!!ERROR - The TTL is not in a valid format, must be hh:mm:ss upto a maximum ' 'of 23:59:59 !!!\n'
+                                        "{'stesworld.org': ('10.10.20.1', 'computer7', '24:61:71')}\n"
+                                        '!!!ERROR - The following IP addresses have duplicate entries in the CSV !!!\n' '10.10.10.10\n'
+                                        '!!!ERROR - The following MAC addresses have duplicate entries in the CSV ' '!!!\n' '1a-1b-1c-1f-1e-1f\n'
+                                       ), 'Error detecting badly formated MAC address, TTL domain name, IP not in scope or duplicate MAC or IP adddresses'
 
 # Tests that the DM of reverse lookup is in correct format
 def test_dns_rv():
