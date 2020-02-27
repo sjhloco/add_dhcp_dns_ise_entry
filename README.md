@@ -68,19 +68,19 @@ python main.py name_of_csv.csv
 
 Only if the CSV validation checks have passed will a user be prompted for credentials and get to the main menu. Tasks can be run individually or all together.
 
-IMAGE
+<img width="903" alt="Screenshot 2020-02-27 at 21 24 14" src="https://user-images.githubusercontent.com/33333983/75488046-87bde100-59a7-11ea-9988-e3f37b49785e.png">
 
 ### Validation against the server
 
 Before performing any action (*add* or *remove*) the script will validate that either the CSV entries do not exist (*add*) or do exist (remove) for all the systems before moving onto performing the action. If these checks fail they must be rectified (either in CSV or the server) before re-running the script.
 
-IMAGE
+<img width="903" alt="Screenshot 2020-02-27 at 21 26 34" src="https://user-images.githubusercontent.com/33333983/75488271-ebe0a500-59a7-11ea-8878-c4780b9905df.png">
 
 ### Add/ remove entries
 
 In the initial pre-checks the script grabs the number of entries for each system before any change has been made. This same action is performed at post-check and these figures are cross referenced against the number of entries in the CSV to validate the action completed with the desired result.
 
-IMAGE
+<img width="909" alt="Screenshot 2020-02-27 at 21 25 53" src="https://user-images.githubusercontent.com/33333983/75488286-f602a380-59a7-11ea-91e1-7081f3b8abcd.png">
 
 ## Unit Testing
 
